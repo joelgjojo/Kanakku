@@ -59,7 +59,7 @@ Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of 
 |---|---|---|
 | `GEMINI_API_KEY` | Voice, notebook photos, shelf check, smarter parsing | Free at https://aistudio.google.com/apikey (new keys start with `AQ.`, which is fine) |
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Cloud database (needed on Vercel so data survives restarts) | supabase.com → new project → run `supabase/schema.sql` in the SQL editor |
-| `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `PUBLIC_URL` | A real WhatsApp number | Twilio WhatsApp sandbox (steps on the `/whatsapp` page) |
+| `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_VERIFY_TOKEN` | A real WhatsApp number (free) | Meta WhatsApp Cloud API test number (steps below) |
 
 Without Supabase, data is saved to `.data/kanakku.json` on your laptop. That's fine for a demo run entirely from one laptop.
 
@@ -98,22 +98,36 @@ It checks the AI, saving a bill, stock, pattu, every bot command, the dashboard 
 3. **Deployments → ⋯ → Redeploy** so the keys take effect. Open the link: the sidebar should show green dots for Gemini and Supabase.
 4. `vercel.json` runs the app in Mumbai (`bom1`), next to the Supabase database, so pages load fast.
 
-**2. Twilio WhatsApp sandbox (10 min)**
-1. Sign up at [twilio.com](https://www.twilio.com/try-twilio) (free trial).
-2. **Messaging → Try it out → Send a WhatsApp message**. From your phone, send the `join <two-words>` code to the sandbox number shown. Every phone that will use the bot (yours, teammates', the demo phone) must do this once.
-3. Copy **Account SID** and **Auth Token** from the Console home page.
-4. In Vercel, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `PUBLIC_URL=https://your-app.vercel.app` (exact, no slash at the end). Redeploy.
-5. Back in Twilio, open **Sandbox settings** and set **When a message comes in** to `https://your-app.vercel.app/api/whatsapp`, method **POST**. Save.
-6. Send "hi" to the sandbox number on WhatsApp. Kanakku should reply with its menu.
+**2. Real WhatsApp, free, through Meta's Cloud API (20 min)**
 
-Slow messages (big notebook photos) get an instant "⏳ Reading it now" reply, and the result follows as a second message, so Twilio's 15-second limit never cuts you off.
+Meta gives every developer a free test WhatsApp number that can chat with up to 5 phones. No card, no Twilio.
 
-**Testing WhatsApp from your laptop instead:** run `npx ngrok http 3000` (free ngrok account needed), put the `https://….ngrok-free.app` address in `PUBLIC_URL` in `.env.local`, restart `npm run dev`, and use `<ngrok address>/api/whatsapp` as the Twilio webhook.
+1. Go to [developers.facebook.com](https://developers.facebook.com), log in with Facebook, and register as a developer if asked.
+2. **My Apps → Create App**. Choose use case **Other**, then app type **Business**. Name it `Kanakku`. If it asks for a business portfolio, let it create one.
+3. On the app page, find **WhatsApp** and click **Set up**.
+4. Open **WhatsApp → API Setup**. You'll see a **test number**, its **Phone number ID**, and a **temporary access token**.
+5. Under **To**, click **Manage phone number list** and add every phone that will use the bot (yours, teammates', the demo phone). Each gets a code on WhatsApp to confirm.
+6. In Vercel **Environment Variables**, add:
+   - `WHATSAPP_TOKEN` = the access token
+   - `WHATSAPP_PHONE_NUMBER_ID` = the Phone number ID (not the phone number)
+   - `WHATSAPP_VERIFY_TOKEN` = any secret word you choose, e.g. `kanakku-kada-2026`
+   - optional: `META_APP_SECRET` = **App settings → Basic → App secret**
 
-**If WhatsApp doesn't reply**
-- Twilio Console → **Monitor → Logs → Errors**. Error 11200 means Twilio couldn't reach the app, so check the URL.
-- A 403 in Vercel's logs (**Deployments → Logs**) means `PUBLIC_URL` doesn't match the webhook address exactly.
-- The sandbox forgets a phone after 72 hours of no messages. Send the `join` code again.
+   Then **Redeploy**.
+7. Back in Meta: **WhatsApp → Configuration → Webhook → Edit**:
+   - Callback URL: `https://your-app.vercel.app/api/whatsapp/meta`
+   - Verify token: the same secret word
+   - Click **Verify and save**, then under **Webhook fields** click **Manage** and subscribe to **messages**.
+8. On your phone, send "hi" to the test number. Kanakku replies with its menu.
+
+**The temporary token expires every 24 hours.** On demo day, either copy a fresh one into Vercel and redeploy, or make a permanent one: **business.facebook.com → Settings → Users → System users → Add** (Admin), then **Assign assets** (your app, full control), then **Generate new token** with permissions `whatsapp_business_messaging` and `whatsapp_business_management`, expiry **Never**. Use that as `WHATSAPP_TOKEN`.
+
+**If WhatsApp doesn't reply**, open Vercel → **Logs**, search `kanakku`, and read the line:
+- `token expired` (code 190): paste a new access token into Vercel and redeploy.
+- code 131030: that phone isn't in the **To** list on API Setup.
+- No `WhatsApp (Meta) in` line at all: the webhook isn't subscribed to **messages**, or the callback URL is wrong.
+
+Twilio is still supported at `/api/whatsapp`, but a Twilio **trial** account can't send replies (it demands message templates and then refuses to create them), so it only works on an upgraded account.
 
 ---
 

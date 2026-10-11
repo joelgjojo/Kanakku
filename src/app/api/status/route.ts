@@ -7,7 +7,8 @@ export async function GET() {
   return ok({
     ai: process.env.GEMINI_API_KEY ? "gemini" : "offline",
     store: getStore().kind,
-    whatsapp: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    whatsapp: !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) || !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    whatsappVia: process.env.WHATSAPP_TOKEN ? "meta" : process.env.TWILIO_ACCOUNT_SID ? "twilio" : null,
     shopName: process.env.NEXT_PUBLIC_SHOP_NAME ?? "Ammu Stores",
   });
 }

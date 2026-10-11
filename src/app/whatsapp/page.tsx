@@ -126,15 +126,16 @@ export default function WhatsApp() {
           <div className="panel p-5">
             <h2 className="text-lg font-semibold">Connect a real WhatsApp number</h2>
             <p className={clsx("text-sm mt-1 font-semibold", status?.whatsapp ? "text-leaf" : "text-warn")}>
-              {status ? (status.whatsapp ? "Twilio keys found. Messages to your sandbox number reach Kanakku." : "Not connected yet. The simulator works without it.") : " "}
+              {status ? (status.whatsapp ? "WhatsApp keys found. Messages to your number reach Kanakku." : "Not connected yet. The simulator works without it.") : "\u00a0"}
             </p>
+            <p className="text-sm text-muted mt-1">Free, through Meta&apos;s WhatsApp Cloud API test number (up to 5 phones).</p>
             <ol className="mt-3 space-y-2 text-[0.95rem] list-decimal pl-5">
-              <li>Create a free Twilio account and open <b>Messaging → Try it out → Send a WhatsApp message</b>. Join the sandbox from your phone.</li>
-              <li>Put <code className="rounded bg-wall px-1">TWILIO_ACCOUNT_SID</code> and <code className="rounded bg-wall px-1">TWILIO_AUTH_TOKEN</code> in <code className="rounded bg-wall px-1">.env.local</code> and restart.</li>
-              <li>Make the app reachable from the internet: deploy to Vercel, or run <code className="rounded bg-wall px-1">npx ngrok http 3000</code>.</li>
-              <li>In the sandbox settings, set <b>When a message comes in</b> to
-                <code className="block mt-1 rounded bg-wall px-2 py-1 break-all">{(process.env.NEXT_PUBLIC_PUBLIC_URL || origin || "https://your-app") + "/api/whatsapp"}</code>
-                with method POST. Set <code className="rounded bg-wall px-1">PUBLIC_URL</code> to the same address so signatures check out.
+              <li>At <b>developers.facebook.com</b> create an app (type <b>Business</b>) and add the <b>WhatsApp</b> product.</li>
+              <li>In <b>WhatsApp → API Setup</b>, add each phone that will chat with the bot under <b>To</b> and verify it with the code Meta sends.</li>
+              <li>Copy the <b>access token</b> and <b>Phone number ID</b> into <code className="rounded bg-wall px-1">WHATSAPP_TOKEN</code> and <code className="rounded bg-wall px-1">WHATSAPP_PHONE_NUMBER_ID</code>, and pick any secret word for <code className="rounded bg-wall px-1">WHATSAPP_VERIFY_TOKEN</code>. Add them in Vercel and redeploy.</li>
+              <li>In <b>WhatsApp → Configuration</b>, set the Callback URL to
+                <code className="block mt-1 rounded bg-wall px-2 py-1 break-all">{(process.env.NEXT_PUBLIC_PUBLIC_URL || origin || "https://your-app") + "/api/whatsapp/meta"}</code>
+                with the same secret word as the Verify token, then subscribe to <b>messages</b>.
               </li>
             </ol>
           </div>

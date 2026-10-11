@@ -127,5 +127,28 @@ await check("WhatsApp webhook answers like Twilio expects", async () => {
   return body.includes("<Message>") ? body.replace(/<[^>]+>/g, " ").trim().split("\n")[0] : "accepted; reply sent through Twilio's API";
 });
 
+await check("WhatsApp (Meta) webhook verification", async () => {
+  const token = process.env.WHATSAPP_VERIFY_TOKEN;
+  if (!token) return "skipped: WHATSAPP_VERIFY_TOKEN not in .env.local";
+  const res = await fetch(`${BASE}/api/whatsapp/meta?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(token)}&hub.challenge=kanakku123`);
+  const body = await res.text();
+  if (res.status === 403) throw new Error("Rejected. WHATSAPP_VERIFY_TOKEN on the server is different from the one in .env.local.");
+  assert(res.ok && body === "kanakku123", `${res.status}: ${body.slice(0, 100)}`);
+  return "Meta can verify the webhook";
+});
+
+await check("WhatsApp (Meta) webhook accepts a message", async () => {
+  const raw = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "0" }, messages: [{ id: `wamid.test${Date.now()}`, from: "910000000000", type: "text", text: { body: "innathe kanakku" } }] } }] }],
+  });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (process.env.META_APP_SECRET) headers["X-Hub-Signature-256"] = "sha256=" + crypto.createHmac("sha256", process.env.META_APP_SECRET).update(raw).digest("hex");
+  const res = await fetch(`${BASE}/api/whatsapp/meta`, { method: "POST", headers, body: raw });
+  if (res.status === 403) throw new Error("Signature rejected. META_APP_SECRET differs between the server and .env.local.");
+  assert(res.ok, `${res.status}: ${(await res.text()).slice(0, 100)}`);
+  return "accepted (the reply goes to a fake test number, so it fails harmlessly)";
+});
+
 console.log(failed ? `\n${failed} check(s) failed. Paste this output to Claude.` : "\nEverything works. Remember: Stock → Reset to the starting demo before you present.");
 process.exit(failed ? 1 : 0);
