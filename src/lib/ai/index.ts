@@ -77,8 +77,9 @@ ${input.audio ? "The shopkeeper's voice note is attached. Transcribe it exactly,
     const out = await askJSON<Omit<ParsedMessage, "engine">>(prompt, MESSAGE_SCHEMA, input.audio);
     return { ...out, items: out.items ?? [], engine: "gemini" };
   } catch (e) {
+    console.error("[kanakku] Gemini failed:", (e as Error).message);
     // Network or quota trouble: typed text can still be billed offline.
-    if (input.text) return offlineParse(input.text, products, customers);
+    if (input.text && process.env.KANAKKU_STRICT_AI !== "1") return offlineParse(input.text, products, customers);
     throw e;
   }
 }

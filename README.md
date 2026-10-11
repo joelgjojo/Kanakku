@@ -42,6 +42,12 @@ cp .env.example .env.local     # then paste your Gemini key into it
 npm run dev
 ```
 
+Check the AI key before anything else:
+
+```bash
+npm run test:ai      # parses 3 Malayalam/Manglish bills with Gemini and prints the result
+```
+
 Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of history loads by itself.
 
 **It runs with zero keys.** Without a Gemini key, typed bills use the offline parser, and voice, notebook, and shelf show a clear message. With the key, everything works.
@@ -50,7 +56,7 @@ Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of 
 
 | Key | Needed for | Get it |
 |---|---|---|
-| `GEMINI_API_KEY` | Voice, notebook photos, shelf check, smarter parsing | Free at https://aistudio.google.com/apikey |
+| `GEMINI_API_KEY` | Voice, notebook photos, shelf check, smarter parsing | Free at https://aistudio.google.com/apikey (new keys start with `AQ.`, which is fine) |
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Cloud database (needed on Vercel so data survives restarts) | supabase.com → new project → run `supabase/schema.sql` in the SQL editor |
 | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `PUBLIC_URL` | A real WhatsApp number | Twilio WhatsApp sandbox (steps on the `/whatsapp` page) |
 
@@ -94,7 +100,7 @@ Go to **Stock → Reset to the starting demo** so the numbers are clean.
 
 - **Structured output, never free text.** Every Gemini call passes a JSON schema (`responseJsonSchema`), so the app always gets `{intent, items[{productId, qty, unit}], customerName, paymentMode}`. The product catalogue (with Malayalam names and Manglish aliases) goes into the prompt, so "ari", "അരി", and "matta" all map to the same product.
 - **Model fallback.** `lib/ai/gemini.ts` tries `gemini-3.6-flash`, then `gemini-3-flash-preview`, then `gemini-3.1-flash-lite`, so a retired model or a rate limit doesn't kill the demo.
-- **Offline parser.** `lib/ai/offline.ts` handles Malayalam suffixes (`പരിപ്പും` → `പരിപ്പ്`), number words (`അര`, `രണ്ട്`, `randu`), grams to kg, and credit/UPI keywords. Test it with `npx tsx scripts/parse-test.ts`.
+- **Offline parser.** `lib/ai/offline.ts` handles Malayalam suffixes (`പരിപ്പും` → `പരിപ്പ്`), number words (`അര`, `രണ്ട്`, `randu`), grams to kg, and credit/UPI keywords. Test it with `npm run test:parser`.
 - **Restock forecast.** Weighted moving average over 14 days (the last week counts double) → units sold per day → days of stock left → reorder quantity for one week.
 - **Pattu ageing.** Payments are applied to the oldest credit first, so "oldest unpaid: 12 days" is accurate.
 - **Notebook import is honest.** If the amount written in the book differs from catalogue prices, an "As written in book" line keeps the customer's balance exactly what the book says.

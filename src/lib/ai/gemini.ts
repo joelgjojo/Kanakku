@@ -53,7 +53,19 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media):
       if (!/404|not found|unsupported|429|quota|exhausted|503|overloaded|unavailable/i.test(msg)) break;
     }
   }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  throw friendly(lastErr);
+}
+
+// Turn Google's raw errors into something the team can act on.
+function friendly(e: unknown): Error {
+  const msg = String((e as Error)?.message ?? e);
+  console.error("[kanakku] Gemini error from Google:", msg);
+  if (/API key not valid|API_KEY_INVALID|401|UNAUTHENTICATED|ACCESS_TOKEN_TYPE_UNSUPPORTED|PERMISSION_DENIED|403/i.test(msg)) {
+    return new Error("Gemini rejected the API key. Check GEMINI_API_KEY in .env.local, then restart npm run dev. Run npm run test:ai to see Google's full error.");
+  }
+  if (/429|quota|exhausted/i.test(msg)) return new Error("Gemini free quota is used up for now. Wait a minute, or use another key.");
+  if (/fetch failed|ENOTFOUND|ECONNRESET|ETIMEDOUT|network/i.test(msg)) return new Error("Can't reach Gemini. Check the internet connection. Typed bills still work offline.");
+  return e instanceof Error ? e : new Error(msg);
 }
 
 // Browsers send things like "audio/webm;codecs=opus". Gemini wants the bare type.
