@@ -1,5 +1,6 @@
 import { getStore } from "@/lib/store";
 import { parseMessage } from "@/lib/ai";
+import { lastCall } from "@/lib/ai/gemini";
 import { toBillItems } from "@/lib/kanakku";
 import { fail, fileToMedia, ok } from "@/lib/http";
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     const store = getStore();
     const [products, customers] = await Promise.all([store.listProducts(), store.listCustomers()]);
     const parsed = await parseMessage({ text, audio }, products, customers);
-    return ok({ parsed, items: toBillItems(parsed.items, products) });
+    return ok({ parsed, items: toBillItems(parsed.items, products), ai: parsed.engine === "gemini" ? lastCall : null });
   } catch (e) {
     return fail(e, 500);
   }

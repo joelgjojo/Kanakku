@@ -34,6 +34,9 @@ function thinking(model: string, effort: Effort) {
   return { thinkingLevel: (effort === "fast" ? "MINIMAL" : "LOW") as never };
 }
 
+/** Which model answered the last call and how long each try took (for logs and the speed test). */
+export let lastCall: { model: string | null; ms: number; tries: { model: string; ms: number; error?: string }[] } = { model: null, ms: 0, tries: [] };
+
 /** Ask Gemini for JSON matching `schema`. Media (audio/image) is optional. */
 export async function askJSON<T>(prompt: string, schema: object, media?: Media, effort: Effort = "fast"): Promise<T> {
   const parts: { text?: string; inlineData?: Media }[] = [];
@@ -41,7 +44,10 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
   parts.push({ text: prompt });
 
   let lastErr: unknown;
+  const started = Date.now();
+  const tries: { model: string; ms: number; error?: string }[] = [];
   for (const model of MODELS) {
+    const t0 = Date.now();
     try {
       const call = (withThinking: boolean) =>
         ai().models.generateContent({
@@ -64,10 +70,15 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
       }
       const text = res.text;
       if (!text) throw new Error("Empty response from Gemini");
+      tries.push({ model, ms: Date.now() - t0 });
+      lastCall = { model, ms: Date.now() - started, tries };
+      console.log(`[kanakku] gemini ${model} ${Date.now() - started} ms` + (tries.length > 1 ? ` (tries: ${tries.map((t) => `${t.model} ${t.ms}ms${t.error ? ` ${t.error}` : ""}`).join(", ")})` : ""));
       return JSON.parse(text) as T;
     } catch (e) {
       lastErr = e;
       const msg = String((e as Error)?.message ?? e);
+      tries.push({ model, ms: Date.now() - t0, error: msg.slice(0, 80) });
+      lastCall = { model: null, ms: Date.now() - started, tries };
       // Only move to the next model for "model not found / overloaded / quota" style errors.
       if (!/404|not found|unsupported|429|quota|exhausted|503|overloaded|unavailable/i.test(msg)) break;
     }
