@@ -122,8 +122,9 @@ await check("WhatsApp webhook answers like Twilio expects", async () => {
   const res = await fetch(`${BASE}/api/whatsapp`, { method: "POST", headers, body: params.toString() });
   const body = await res.text();
   if (res.status === 403) throw new Error("Signature rejected. PUBLIC_URL on the server must be exactly the address Twilio calls, and the auth tokens must match.");
-  assert(res.ok && body.includes("<Message>"), `${res.status}: ${body.slice(0, 200)}`);
-  return body.replace(/<[^>]+>/g, " ").trim().split("\n")[0];
+  assert(res.ok && body.includes("<Response"), `${res.status}: ${body.slice(0, 200)}`);
+  // With Twilio keys set, replies go out through Twilio's API (to this fake test number, so they fail harmlessly).
+  return body.includes("<Message>") ? body.replace(/<[^>]+>/g, " ").trim().split("\n")[0] : "accepted; reply sent through Twilio's API";
 });
 
 console.log(failed ? `\n${failed} check(s) failed. Paste this output to Claude.` : "\nEverything works. Remember: Stock → Reset to the starting demo before you present.");

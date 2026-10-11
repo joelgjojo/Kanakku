@@ -24,9 +24,16 @@ export async function POST(req: Request) {
   }
 
   const from = params.get("From") ?? ""; // the shopkeeper, e.g. whatsapp:+9194...
-  const to = params.get("To") ?? ""; // our sandbox number
+  const to = params.get("To") ?? ""; // our Twilio WhatsApp number
   const text = params.get("Body") ?? "";
   const hasMedia = Number(params.get("NumMedia") ?? 0) > 0;
+  console.log(`[kanakku] WhatsApp in: from ${from} to ${to}, ${hasMedia ? `media ${params.get("MediaContentType0")}` : `"${text.slice(0, 60)}"`}`);
+
+  // Replies go out through Twilio's Messages API, not in the webhook response.
+  // Newer Twilio trial WhatsApp numbers ignore replies in the response, and the API
+  // tells us exactly why a send fails (it shows up in Vercel's logs).
+  // Set WHATSAPP_REPLY_MODE=twiml to use the old in-response reply instead.
+  const useApi = process.env.WHATSAPP_REPLY_MODE !== "twiml" && !!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN;
 
   const work: Promise<BotReply> = (async () => {
     let media: Media | undefined;
@@ -36,18 +43,26 @@ export async function POST(req: Request) {
   })().catch((e) => ({ kind: "error", reply: `⚠️ ${(e as Error).message}` }) as BotReply);
 
   const quick = await Promise.race([work, new Promise<null>((r) => setTimeout(() => r(null), REPLY_BUDGET_MS))]);
-  if (quick) return twiml(quick.reply);
+  if (quick) {
+    if (!useApi) return twiml(quick.reply);
+    await sendWhatsApp(from, to, quick.reply);
+    return twiml(null);
+  }
 
-  // Still working: answer now, finish in the background, then message the shopkeeper.
+  // Still working (big photo): say so now, finish in the background, then send the result.
+  const wait = hasMedia ? "⏳ Reading it now. I'll send the result in a few seconds." : "⏳ One moment…";
   after(async () => {
     const res = await work;
     await sendWhatsApp(from, to, res.reply);
   });
-  return twiml(hasMedia ? "⏳ Reading it now. I'll send the result in a few seconds." : "⏳ One moment…");
+  if (!useApi) return twiml(wait);
+  await sendWhatsApp(from, to, wait);
+  return twiml(null);
 }
 
-function twiml(message: string) {
-  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(message)}</Message></Response>`, {
+function twiml(message: string | null) {
+  const inner = message ? `<Message>${escapeXml(message)}</Message>` : "";
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${inner}</Response>`, {
     headers: { "Content-Type": "text/xml; charset=utf-8" },
   });
 }
@@ -70,12 +85,19 @@ async function downloadMedia(url: string, type: string | null): Promise<Media | 
 async function sendWhatsApp(to: string, from: string, body: string) {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   if (!sid || !process.env.TWILIO_AUTH_TOKEN) return console.error("[kanakku] Can't send follow-up: Twilio keys missing");
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: "POST",
-    headers: { Authorization: twilioAuth(), "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ To: to, From: from, Body: body.slice(0, 1550) }),
-  });
-  if (!res.ok) console.error(`[kanakku] Twilio send failed: ${res.status} ${await res.text()}`);
+  let res: Response;
+  try {
+    res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: "POST",
+      headers: { Authorization: twilioAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ To: to, From: from, Body: body.slice(0, 1550) }),
+    });
+  } catch (e) {
+    return console.error(`[kanakku] Couldn't reach Twilio to send the reply: ${(e as Error).message}`);
+  }
+  const out = (await res.json().catch(() => ({}))) as { sid?: string; status?: string; code?: number; message?: string };
+  if (!res.ok) console.error(`[kanakku] Twilio send FAILED (${res.status}) code ${out.code}: ${out.message} — from ${from} to ${to}`);
+  else console.log(`[kanakku] WhatsApp reply queued: ${out.sid} status=${out.status}`);
 }
 
 function escapeXml(s: string) {
