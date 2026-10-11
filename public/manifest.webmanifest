@@ -1,0 +1,10 @@
+{
+  "name": "Kanakku",
+  "short_name": "Kanakku",
+  "description": "Shop accounts from your notebook and WhatsApp",
+  "start_url": "/bill",
+  "display": "standalone",
+  "background_color": "#eef1ef",
+  "theme_color": "#eef1ef",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

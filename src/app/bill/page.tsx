@@ -1,0 +1,298 @@
+"use client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import clsx from "clsx";
+import { Check, Mic, Plus, Search, Send, Square, Trash2 } from "lucide-react";
+import { api, waLink } from "@/lib/client";
+import { qtyLabel, rupees, unitLabel } from "@/lib/format";
+import type { Bill, BillItem, ParsedMessage, PaymentMode, Product } from "@/lib/types";
+import type { Balance } from "@/lib/kanakku";
+import { useRecorder } from "@/components/useRecorder";
+import { enqueueBill } from "@/components/OfflineSync";
+import { Button, ErrorNote, PageHeader, Segmented, inputCls } from "@/components/ui";
+
+const EXAMPLES = ["രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്", "2 kg ari, 1 soap, 6 mutta", "അര കിലോ പരിപ്പും ഒരു സോപ്പും gpay"];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function mergeItems(a: BillItem[], b: BillItem[]) {
+  const out = a.map((x) => ({ ...x }));
+  for (const i of b) {
+    const same = i.productId && out.find((x) => x.productId === i.productId && x.price === i.price);
+    if (same) { same.qty = round2(same.qty + i.qty); same.total = round2(same.qty * same.price); }
+    else out.push(i);
+  }
+  return out;
+}
+
+export default function NewBill() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Balance[]>([]);
+  const [items, setItems] = useState<BillItem[]>([]);
+  const [customer, setCustomer] = useState("");
+  const [mode, setMode] = useState<PaymentMode>("cash");
+  const [text, setText] = useState("");
+  const [heard, setHeard] = useState<{ transcript: string; engine: ParsedMessage["engine"]; via: "voice" | "text" } | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ bill: Bill | null; due: number | null; offline?: boolean } | null>(null);
+  const [q, setQ] = useState("");
+  const billRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    api<{ products: Product[] }>("/api/products").then((r) => setProducts(r.products)).catch(() => {});
+    api<Balance[]>("/api/customers").then(setCustomers).catch(() => {});
+  }, []);
+
+  const applyParse = useCallback((r: { parsed: ParsedMessage; items: BillItem[] }, via: "voice" | "text") => {
+    setHeard({ transcript: r.parsed.transcript, engine: r.parsed.engine, via });
+    if (r.parsed.intent !== "sale" || !r.items.length) {
+      setError(r.parsed.intent === "payment" || r.parsed.intent === "restock"
+        ? "That sounds like a payment or stock delivery. Use the Pattu book or Stock page, or send it to the WhatsApp bot."
+        : "Couldn't find any items in that. Try again, naming the item and quantity.");
+      return;
+    }
+    setItems((cur) => mergeItems(cur, r.items));
+    // On a phone the bill sits below the mic: bring it into view.
+    if (window.innerWidth < 1024) setTimeout(() => billRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    if (r.parsed.customerName) setCustomer(r.parsed.customerName);
+    if (r.parsed.paymentMode !== "cash") setMode(r.parsed.paymentMode);
+  }, []);
+
+  const parse = useCallback(async (form: FormData) => {
+    setParsing(true);
+    setError(null);
+    setSaved(null);
+    try {
+      applyParse(await api("/api/ai/parse", { method: "POST", body: form }), form.has("audio") ? "voice" : "text");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setParsing(false);
+    }
+  }, [applyParse]);
+
+  const rec = useRecorder(async (wav) => {
+    const f = new FormData();
+    f.append("audio", wav, "voice.wav");
+    await parse(f);
+  });
+
+  const sendText = (t = text) => {
+    if (!t.trim()) return;
+    const f = new FormData();
+    f.append("text", t);
+    setText("");
+    parse(f);
+  };
+
+  const addProduct = (p: Product) => {
+    setSaved(null);
+    const step = p.unit === "pc" ? 1 : 1;
+    setItems((cur) => mergeItems(cur, [{ productId: p.id, name: p.name, nameMl: p.nameMl, qty: step, unit: p.unit, price: p.price, total: p.price * step }]));
+  };
+
+  const update = (idx: number, patch: Partial<BillItem>) =>
+    setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, ...patch, total: round2((patch.qty ?? x.qty) * (patch.price ?? x.price)) } : x)));
+
+  const total = round2(items.reduce((s, i) => s + i.qty * i.price, 0));
+  const customerMatch = customers.find((c) => c.customer.name.toLowerCase() === customer.trim().toLowerCase());
+
+  const save = async () => {
+    setError(null);
+    if (mode === "credit" && !customer.trim()) return setError("Pattu needs a customer name.");
+    const body = {
+      items: items.filter((i) => i.qty > 0),
+      customerName: customer.trim() || null,
+      paymentMode: mode,
+      source: heard?.via ?? "manual",
+      rawInput: heard?.transcript,
+      createdAt: new Date().toISOString(),
+    };
+    setSaving(true);
+    try {
+      const r = await api<{ bill: Bill; due: number | null }>("/api/bills", { json: body });
+      setSaved(r);
+      reset();
+      api<Balance[]>("/api/customers").then(setCustomers).catch(() => {});
+    } catch (e) {
+      if (!navigator.onLine || (e as Error).message.includes("fetch")) {
+        enqueueBill(body);
+        setSaved({ bill: null, due: null, offline: true });
+        reset();
+      } else setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => { setItems([]); setCustomer(""); setMode("cash"); setHeard(null); };
+
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return products;
+    return products.filter((p) => [p.name, p.nameMl, ...p.aliases].some((n) => n.toLowerCase().includes(s)));
+  }, [products, q]);
+
+  const receipt = saved?.bill
+    ? `${saved.bill.customerName ? `Hi ${saved.bill.customerName}, ` : ""}your bill from ${process.env.NEXT_PUBLIC_SHOP_NAME ?? "Ammu Stores"} 🧾\n${saved.bill.items.map((i) => `${i.nameMl ?? i.name} ${qtyLabel(i.qty, i.unit)} = ${rupees(i.total)}`).join("\n")}\nTotal: ${rupees(saved.bill.total)}${saved.bill.paymentMode === "credit" && saved.due !== null ? `\nPattu balance: ${rupees(saved.due)}` : ""}\nNanni! 🙏`
+    : "";
+  const receiptPhone = saved?.bill?.customerId ? customers.find((c) => c.customer.id === saved.bill!.customerId)?.customer.phone : undefined;
+
+  return (
+    <>
+      <PageHeader title="New bill" ml="പറഞ്ഞാൽ മതി, ബിൽ റെഡി" />
+      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+        {/* Capture */}
+        <section className="space-y-4 lg:col-start-1 lg:row-start-1">
+          <div className="panel p-5 flex flex-col items-center text-center">
+            <button
+              onClick={rec.toggle}
+              disabled={rec.state === "processing" || parsing}
+              aria-label={rec.state === "recording" ? "Stop recording" : "Start speaking"}
+              className={clsx(
+                "grid place-items-center size-32 rounded-full transition-colors disabled:opacity-60",
+                rec.state === "recording" ? "bg-margin text-white recording" : "bg-sign text-ink hover:bg-[#f7cf4f]",
+              )}
+            >
+              {rec.state === "recording" ? <Square size={38} fill="currentColor" /> : <Mic size={46} strokeWidth={2.2} />}
+            </button>
+            <p className="mt-4 text-lg font-semibold">
+              {rec.state === "recording" ? `Listening… ${rec.seconds}s. Tap to finish.` : parsing || rec.state === "processing" ? "Writing the bill…" : "Tap and say the bill"}
+            </p>
+            <p className="text-muted text-sm">Malayalam, Manglish or English</p>
+            {rec.error && <div className="mt-3 w-full"><ErrorNote>{rec.error}</ErrorNote></div>}
+
+            <form className="mt-5 flex w-full gap-2" onSubmit={(e) => { e.preventDefault(); sendText(); }}>
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type: 2 kg ari, 1 soap" className={inputCls} aria-label="Type the bill" />
+              <Button type="submit" variant="outline" disabled={!text.trim() || parsing}>Add</Button>
+            </form>
+            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+              {EXAMPLES.map((ex) => (
+                <button key={ex} onClick={() => sendText(ex)} className="rounded-full border border-line px-3 py-1 text-sm text-muted hover:text-ink hover:bg-wall">
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </section>
+
+        {/* The bill, written on a notebook page */}
+        <section ref={billRef} className="scroll-mt-16 space-y-3 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+          {saved && (
+            <div className="panel slip-in p-4 border-leaf/40 bg-leaf-soft">
+              <p className="font-semibold text-leaf flex items-center gap-2"><Check size={18} />
+                {saved.offline ? "Saved on this phone. It will sync when the internet is back." : `Bill #${saved.bill!.number} saved: ${rupees(saved.bill!.total)}`}
+              </p>
+              {saved.bill?.paymentMode === "credit" && saved.due !== null && (
+                <p className="text-sm mt-1">{saved.bill.customerName}&apos;s pattu is now <b className="text-due num">{rupees(saved.due)}</b></p>
+              )}
+              {saved.bill && (
+                <a href={waLink(receiptPhone, receipt)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 h-9 rounded-lg bg-paper border border-line px-3 text-sm font-semibold hover:bg-wall">
+                  <Send size={15} /> Send receipt on WhatsApp
+                </a>
+              )}
+            </div>
+          )}
+
+          <div className="panel overflow-hidden">
+            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Bill</h2>
+              {heard && (
+                <p className="text-sm text-muted truncate" title={heard.transcript}>
+                  Heard: <span className="text-ink">“{heard.transcript}”</span>
+                </p>
+              )}
+            </div>
+            <div className="ledger">
+              {items.length === 0 && (
+                <p className="ledger-row pl-14 pr-4 text-faint">Speak, type or tap items. They appear here.</p>
+              )}
+              {items.map((it, i) => (
+                <div key={i} className="ledger-row gap-2 pr-3 slip-in">
+                  <span className="w-11 shrink-0 text-center text-sm text-faint num">{i + 1}</span>
+                  <span className="flex-1 min-w-0 leading-tight">
+                    <span className="block truncate font-semibold text-pen-dark">{it.nameMl ?? it.name}</span>
+                    {it.nameMl && <span className="block truncate text-xs text-muted">{it.name}{!it.productId && " · not in stock list"}</span>}
+                  </span>
+                  <label className="flex items-center gap-1 text-sm">
+                    <span className="sr-only">Quantity</span>
+                    <input type="number" inputMode="decimal" step="any" min={0} value={it.qty}
+                      onChange={(e) => update(i, { qty: Number(e.target.value) })}
+                      className="num w-14 h-8 rounded-md border border-line bg-paper/80 px-1.5 text-right" />
+                    <span className="w-6 text-muted">{unitLabel[it.unit]}</span>
+                  </label>
+                  <label className="hidden sm:flex items-center text-sm text-muted">
+                    <span className="sr-only">Price per {it.unit}</span>×
+                    <input type="number" inputMode="decimal" step="any" min={0} value={it.price}
+                      onChange={(e) => update(i, { price: Number(e.target.value) })}
+                      className="num w-16 h-8 ml-1 rounded-md border border-line bg-paper/80 px-1.5 text-right text-ink" />
+                  </label>
+                  <span className="num w-20 text-right font-semibold text-pen-dark">{rupees(it.qty * it.price)}</span>
+                  <button onClick={() => setItems((c) => c.filter((_, j) => j !== i))} aria-label={`Remove ${it.name}`} className="p-1.5 rounded-md text-faint hover:text-due hover:bg-due-soft">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              {Array.from({ length: Math.max(0, 5 - Math.max(1, items.length)) }).map((_, i) => <div key={`blank-${i}`} className="ledger-row" aria-hidden />)}
+              <div className="ledger-row pl-14 pr-3 border-t-2 border-ink/70 justify-between">
+                <span className="font-semibold">ആകെ · Total</span>
+                <span className="num sign text-3xl">{rupees(total)}</span>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 border-t border-line">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-sm text-muted">Customer {mode === "credit" ? "(needed for pattu)" : "(optional)"}</span>
+                  <input list="customers" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Name" className={clsx(inputCls, "mt-1")} />
+                  <datalist id="customers">{customers.map((c) => <option key={c.customer.id} value={c.customer.name}>{c.customer.nameMl}</option>)}</datalist>
+                  {customerMatch && customerMatch.due > 0 && (
+                    <span className="text-xs text-muted">Pattu already: <b className="text-due num">{rupees(customerMatch.due)}</b></span>
+                  )}
+                </label>
+                <div>
+                  <span className="text-sm text-muted block mb-1">Paid by</span>
+                  <Segmented label="Paid by" value={mode} onChange={setMode}
+                    options={[{ value: "cash", label: "Cash" }, { value: "upi", label: "UPI" }, { value: "credit", label: "Pattu", tone: "due" }]} />
+                </div>
+              </div>
+              <ErrorNote>{error}</ErrorNote>
+              <div className="flex gap-2">
+                <Button onClick={save} busy={saving} disabled={!items.length} className="flex-1 h-12 text-base">
+                  <Plus size={18} /> Save bill {items.length > 0 && <span className="num">· {rupees(total)}</span>}
+                </Button>
+                {items.length > 0 && <Button variant="outline" className="h-12" onClick={reset}>Clear</Button>}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="lg:col-start-1 lg:row-start-2">
+          <div className="panel p-4">
+            <div className="relative mb-3">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an item to tap in" className={clsx(inputCls, "pl-9")} aria-label="Search items" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80 overflow-y-auto pr-1">
+              {shown.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => addProduct(p)}
+                  className="text-left rounded-lg border border-line px-3 py-2 hover:border-pen hover:bg-pen-soft"
+                >
+                  <span className="block font-semibold leading-tight truncate">{p.nameMl}</span>
+                  <span className="flex justify-between text-xs text-muted mt-0.5">
+                    <span className="truncate">{p.name}</span>
+                    <span className="num whitespace-nowrap">{rupees(p.price)}/{unitLabel[p.unit]}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}

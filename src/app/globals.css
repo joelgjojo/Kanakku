@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/*
+  Kanakku design tokens.
+  The shop's own materials: a ruled notebook page, ballpoint-blue ink,
+  the red margin line of a pattu book, banana-leaf green and the yellow
+  of a hand-painted shop signboard (used once: the mic button).
+*/
+@theme {
+  --color-wall: #eef1ef;
+  --color-paper: #fcfcfb;
+  --color-rule: #dbe3ec;
+  --color-line: #d9dedb;
+  --color-ink: #18202e;
+  --color-muted: #5b6472;
+  --color-faint: #8a93a0;
+  --color-pen: #2f4fb0;
+  --color-pen-dark: #233d8c;
+  --color-pen-soft: #e6ebf7;
+  --color-margin: #d2553f;
+  --color-due: #b23a26;
+  --color-due-soft: #fbe9e5;
+  --color-leaf: #2c7a4b;
+  --color-leaf-soft: #e3f1e8;
+  --color-sign: #f4c430;
+  --color-sign-dark: #c99a0c;
+  --color-warn: #a86400;
+  --color-warn-soft: #fdf0d9;
+
+  --font-sans: "Anek Malayalam Variable", "Noto Sans Malayalam", system-ui, sans-serif;
+
+  --radius-panel: 14px;
+}
+
+html {
+  background: var(--color-wall);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-wall);
+  font-family: var(--font-sans);
+  font-variation-settings: "wdth" 100;
+  font-feature-settings: "tnum" 1;
+  line-height: 1.45;
+}
+
+@layer components {
+/* Condensed signboard lettering for headings. */
+.sign {
+  font-variation-settings: "wdth" 78;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A notebook page: blue rules every 2.5rem and a red margin line. */
+.ledger {
+  --ledger-row: 2.5rem;
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(to right, transparent 2.75rem, var(--color-margin) 2.75rem, var(--color-margin) calc(2.75rem + 1.5px), transparent calc(2.75rem + 1.5px)),
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--ledger-row) - 1px), var(--color-rule) calc(var(--ledger-row) - 1px), var(--color-rule) var(--ledger-row));
+  background-position: 0 0, 0 var(--ledger-offset, 0px);
+}
+
+.ledger-row {
+  min-height: var(--ledger-row);
+  display: flex;
+  align-items: center;
+}
+
+.panel {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+}
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-pen);
+  outline-offset: 2px;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Recording pulse on the mic button: the one animated moment in the app. */
+@keyframes ring {
+  0% { box-shadow: 0 0 0 0 rgb(210 85 63 / 0.45); }
+  100% { box-shadow: 0 0 0 22px rgb(210 85 63 / 0); }
+}
+.recording {
+  animation: ring 1.1s ease-out infinite;
+}
+
+@keyframes slip-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.slip-in {
+  animation: slip-in 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording, .slip-in { animation: none; }
+}

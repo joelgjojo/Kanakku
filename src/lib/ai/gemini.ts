@@ -1,0 +1,65 @@
+import { GoogleGenAI } from "@google/genai";
+
+// Try the configured model first, then fall back if Google has retired it
+// or it is rate limited. Keeps the demo alive on stage.
+const MODELS = [
+  process.env.GEMINI_MODEL,
+  "gemini-3.6-flash",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+].filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
+
+let client: GoogleGenAI | null = null;
+
+export const hasGemini = () => !!process.env.GEMINI_API_KEY;
+
+function ai() {
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
+  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  return client;
+}
+
+export interface Media {
+  mimeType: string;
+  data: string; // base64
+}
+
+/** Ask Gemini for JSON matching `schema`. Media (audio/image) is optional. */
+export async function askJSON<T>(prompt: string, schema: object, media?: Media): Promise<T> {
+  const parts: { text?: string; inlineData?: Media }[] = [];
+  if (media) parts.push({ inlineData: { mimeType: cleanMime(media.mimeType), data: media.data } });
+  parts.push({ text: prompt });
+
+  let lastErr: unknown;
+  for (const model of MODELS) {
+    try {
+      const res = await ai().models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: schema,
+          temperature: 0.1,
+        },
+      });
+      const text = res.text;
+      if (!text) throw new Error("Empty response from Gemini");
+      return JSON.parse(text) as T;
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message ?? e);
+      // Only move to the next model for "model not found / overloaded / quota" style errors.
+      if (!/404|not found|unsupported|429|quota|exhausted|503|overloaded|unavailable/i.test(msg)) break;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+// Browsers send things like "audio/webm;codecs=opus". Gemini wants the bare type.
+function cleanMime(m: string) {
+  const base = m.split(";")[0].trim().toLowerCase();
+  if (base === "audio/x-m4a" || base === "audio/m4a") return "audio/mp4";
+  if (base === "audio/opus") return "audio/ogg";
+  return base;
+}
