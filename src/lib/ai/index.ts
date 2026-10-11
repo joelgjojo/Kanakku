@@ -1,5 +1,6 @@
 import { askJSON, hasGemini, type Media } from "./gemini";
 import { offlineParse } from "./offline";
+import { istDate } from "../format";
 import type { Customer, NotebookResult, ParsedMessage, Product, PurchaseResult, ShelfResult } from "../types";
 
 const catalogue = (products: Product[]) =>
@@ -30,12 +31,14 @@ const MESSAGE_SCHEMA = {
     items: { type: "array", items: ITEM_SCHEMA },
     amount: { type: ["number", "null"], description: "rupees paid, for payment intent" },
     confidence: { type: "number", description: "0 to 1" },
+    lang: { type: "string", enum: ["ml", "en", "hi", "ta", "bn", "other"], description: "language spoken or typed. Malayalam and Manglish = ml. Hindi in any script = hi" },
   },
-  required: ["intent", "transcript", "customerName", "paymentMode", "items", "amount", "confidence"],
+  required: ["intent", "transcript", "customerName", "paymentMode", "items", "amount", "confidence", "lang"],
 };
 
 const RULES = `You are the billing assistant inside a small Kerala grocery shop (kada).
 The shopkeeper speaks or types in Malayalam, Manglish (Malayalam in English letters) or English, often mixed.
+Many Kerala shops also have helpers from other states who speak Hindi (or Bengali, Tamil, Odia), in their own script or in English letters. Understand them the same way.
 
 Decide the intent:
 - sale: they are billing items to a customer. "രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്" = sale of 2 kg sugar to Rajan on credit.
@@ -51,7 +54,8 @@ Rules:
 - Map every item to the closest product in the catalogue below and use its id and unit. Match Malayalam, Manglish and brand names (e.g. "Milma" = milk, "Lux" = soap).
 - Convert quantities to the catalogue unit: 500 ഗ്രാം of a per-kg item = 0.5; "അര കിലോ" = 0.5; "കാൽ കിലോ" = 0.25; "ഒരു ഡസൻ മുട്ട" = 12.
 - No quantity said = 1.
-- paymentMode is "credit" when they say പറ്റ് / pattu / പറ്റിൽ എഴുതിക്കോ / കടം / credit; "upi" for GPay / UPI / PhonePe; otherwise "cash".
+- Hindi: उधार / udhaar / khata / "likh lo" = credit; "diya" / "jama kiya" = payment; "aaya" / "aa gaya" = stock arrived; chawal = rice, cheeni = sugar, doodh = milk, anda = egg, sabun = soap, namak = salt, aata = wheat flour, pyaz = onion.
+- paymentMode is "credit" when they say പറ്റ് / pattu / പറ്റിൽ എഴുതിക്കോ / കടം / credit / udhaar; "upi" for GPay / UPI / PhonePe; otherwise "cash".
 - customerName: match to a known customer below when possible and return their English name; otherwise return the name as heard. Remove Malayalam case endings (രാജന് → Rajan).
 - price is null unless the shopkeeper said a different price for that item.
 - If an item is not in the catalogue, keep it with productId null and your best guess for unit.`;
@@ -112,7 +116,7 @@ const NOTEBOOK_SCHEMA = {
 
 export async function readNotebook(image: Media, products: Product[], customers: Customer[]): Promise<NotebookResult> {
   if (!hasGemini()) throw new Error("Reading notebook photos needs GEMINI_API_KEY in .env.local");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istDate();
   const prompt = `${RULES}
 
 The attached photo is a page from the shop's handwritten notebook: a sales book or a credit (പറ്റ്) book.
@@ -226,7 +230,7 @@ export async function askShop(question: { text?: string; audio?: Media }, facts:
 Answer ONLY from the shop data below. If the data can't answer it, say so in one line and suggest what to record.
 
 How to answer:
-- Reply in the SAME language and script as the question: Malayalam script → Malayalam; English → English; Manglish (Malayalam in English letters) → simple Manglish. Product and customer names can stay as they are.
+- Reply in the SAME language and script as the question: Malayalam script → Malayalam; English → English; Manglish (Malayalam in English letters) → simple Manglish; Hindi → simple Hindi in the script they used. Product and customer names can stay as they are.
 - Maximum 4 short lines, like a WhatsApp message. Put the key number first. Use ₹ and Indian number style (₹1,250).
 - Be practical: if something needs action (restock, collect pattu, stop credit to someone), say exactly what to do.
 - Profit numbers are estimates from the latest supplier cost prices; say "about" for profit.

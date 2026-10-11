@@ -204,7 +204,7 @@ export async function shopFacts() {
   const daily = new Map<string, { sales: number; credit: number; upi: number; bills: number; profit: number }>();
   for (const b of bills) {
     const t = new Date(b.createdAt).getTime();
-    const day = new Date(t).toLocaleDateString("en-CA");
+    const day = new Date(t).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const d = daily.get(day) ?? { sales: 0, credit: 0, upi: 0, bills: 0, profit: 0 };
     d.sales += b.total; d.bills++;
     if (b.paymentMode === "credit") d.credit += b.total;
@@ -223,8 +223,8 @@ export async function shopFacts() {
   const r = (n: number) => Math.round(n);
   return {
     shop: process.env.NEXT_PUBLIC_SHOP_NAME ?? "Ammu Stores",
-    today: new Date().toLocaleDateString("en-CA"),
-    weekday: new Date().toLocaleDateString("en-IN", { weekday: "long" }),
+    today: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
+    weekday: new Date().toLocaleDateString("en-IN", { weekday: "long", timeZone: "Asia/Kolkata" }),
     daily: [...daily.entries()].sort().map(([day, d]) => ({ day, sales: r(d.sales), pattuGiven: r(d.credit), upi: r(d.upi), bills: d.bills, profit: r(d.profit) })),
     products: products.map((p) => {
       const x = per.get(p.id) ?? { q7: 0, r7: 0, p7: 0, q28: 0, r28: 0, p28: 0 };
@@ -254,7 +254,7 @@ export async function businessReport() {
   const earlier = bills.filter((b) => new Date(b.createdAt).getTime() < mid);
   const days = new Map<string, number>();
   for (const b of bills) {
-    const k = new Date(b.createdAt).toLocaleDateString("en-CA");
+    const k = new Date(b.createdAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     days.set(k, (days.get(k) ?? 0) + b.total);
   }
   const dayVals = [...days.values()];

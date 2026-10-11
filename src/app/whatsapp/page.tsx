@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui";
 
 interface Msg { id: number; from: "shop" | "bot"; text?: string; image?: string; audio?: string; at: Date; pending?: boolean }
 
-const SAMPLES = ["രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്", "Suma 300 thannu", "50 kilo ari vannu", "stock", "pattu", "innathe kanakku"];
+const SAMPLES = ["രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്", "Suma 300 thannu", "50 kilo ari vannu", "stock", "pattu", "innathe kanakku", "morning", "evening", "Rajan ko 2 kilo cheeni udhaar"];
 
 let nextId = 1;
 
@@ -56,7 +56,7 @@ export default function WhatsApp() {
 
   return (
     <>
-      <PageHeader title="WhatsApp bot" ml="കടയുടമ ഒന്നും പുതുതായി പഠിക്കേണ്ട" />
+      <PageHeader title="WhatsApp bot" titleMl="വാട്സ്ആപ്പ് ബോട്ട്" ml="കടയുടമ ഒന്നും പുതുതായി പഠിക്കേണ്ട" />
       <div className="px-4 lg:px-8 grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
         {/* Phone */}
         <section className="mx-auto w-full max-w-[26rem] rounded-[2rem] border-[10px] border-ink bg-ink shadow-[0_18px_40px_-18px_rgb(24_32_46/0.45)] overflow-hidden">
@@ -117,6 +117,16 @@ export default function WhatsApp() {
               ))}
             </div>
             <p className="text-sm text-muted mt-3">Photo tip: add the caption <b className="text-ink">shelf</b> to count a shelf instead of reading a notebook page.</p>
+          </div>
+
+          <div className="panel p-5">
+            <h2 className="text-lg font-semibold">Kanakku messages you first</h2>
+            <p className="text-muted mt-1">The owner doesn&apos;t have to ask. Every day on WhatsApp:</p>
+            <ul className="mt-2 space-y-1.5 text-[0.95rem]">
+              <li>☀️ <b>8 am:</b> what to order today, whose pattu to collect, yesterday vs last week.</li>
+              <li>🌙 <b>9 pm:</b> the day&apos;s sales and profit, and what the cash drawer should hold.</li>
+            </ul>
+            <p className="text-sm text-muted mt-2">Tap <b className="text-ink">morning</b> or <b className="text-ink">evening</b> above to see them. Shop helpers can bill in Hindi too: try the last message.</p>
           </div>
 
           <div className="panel p-5">

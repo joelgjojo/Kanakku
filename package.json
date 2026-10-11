@@ -11,6 +11,7 @@
     "test:parser": "tsx scripts/parse-test.ts",
     "test:db": "tsx --env-file=.env.local scripts/test-db.mts",
     "test:app": "tsx --env-file=.env.local scripts/smoke.mts",
+    "test:eval": "tsx --env-file-if-exists=.env.local scripts/eval.mts",
     "whatsapp": "npm --prefix bridge install --no-audit --no-fund && npm --prefix bridge start"
   },
   "dependencies": {

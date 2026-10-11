@@ -6,11 +6,13 @@ import { Camera, Check, ImagePlus } from "lucide-react";
 import { api, compressImage } from "@/lib/client";
 import { qtyLabel, rupees } from "@/lib/format";
 import type { BillItem, NotebookEntry } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 import { Button, ErrorNote, PageHeader, Spinner, inputCls } from "@/components/ui";
 
 type Entry = NotebookEntry & { billItems: BillItem[]; keep: boolean };
 
 export default function Notebook() {
+  const { t, ml } = useLang();
   const [preview, setPreview] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [reading, setReading] = useState(false);
@@ -54,17 +56,17 @@ export default function Notebook() {
 
   return (
     <>
-      <PageHeader title="Notebook to Kanakku" ml="ബുക്കിന്റെ ഫോട്ടോ എടുത്താൽ മതി" />
+      <PageHeader title="Notebook to Kanakku" titleMl="നോട്ട്ബുക്കിൽ നിന്ന് കണക്കിലേക്ക്" ml="ബുക്കിന്റെ ഫോട്ടോ എടുത്താൽ മതി" />
       <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
-          <p className="text-muted">Take a photo of a page from your sales book or pattu book. Kanakku reads the handwriting and adds every line to your accounts.</p>
+          <p className="text-muted">{t("Take a photo of a page from your sales book or pattu book. Kanakku reads the handwriting and adds every line to your accounts.", "വിൽപ്പന ബുക്കിന്റെയോ പറ്റ് ബുക്കിന്റെയോ ഒരു പേജിന്റെ ഫോട്ടോ എടുക്കൂ. കയ്യക്ഷരം വായിച്ച് ഓരോ വരിയും കണക്ക് ചേർക്കും.")}</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg bg-ink text-paper font-semibold cursor-pointer hover:bg-pen-dark">
-              <Camera size={26} />Take photo
+              <Camera size={26} />{t("Take photo", "ഫോട്ടോ എടുക്കൂ")}
               <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg border border-line font-semibold cursor-pointer hover:bg-wall">
-              <ImagePlus size={26} />Choose from gallery
+              <ImagePlus size={26} />{t("Choose from gallery", "ഗാലറിയിൽ നിന്ന്")}
               <input type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
           </div>
@@ -72,28 +74,28 @@ export default function Notebook() {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="Notebook page to read" className="w-full rounded-lg border border-line" />
-              {!entries && <Button onClick={read} busy={reading} className="w-full h-12 text-base">{reading ? "Reading the handwriting…" : "Read this page"}</Button>}
+              {!entries && <Button onClick={read} busy={reading} className="w-full h-12 text-base">{reading ? t("Reading the handwriting…", "കയ്യക്ഷരം വായിക്കുന്നു…") : t("Read this page", "ഈ പേജ് വായിക്കൂ")}</Button>}
             </>
           )}
           <ErrorNote>{err}</ErrorNote>
           {done && (
             <div className="rounded-lg bg-leaf-soft p-4 text-leaf slip-in">
-              <p className="font-semibold flex items-center gap-2"><Check size={18} />Added {done.sales} sales ({rupees(done.total)}) and {done.payments} payments.</p>
+              <p className="font-semibold flex items-center gap-2"><Check size={18} />{ml ? `${done.sales} വിൽപ്പന (${rupees(done.total)}), ${done.payments} പറ്റ് അടവ് ചേർത്തു.` : `Added ${done.sales} sales (${rupees(done.total)}) and ${done.payments} payments.`}</p>
               <p className="text-sm mt-1 text-ink">See them on <Link className="underline" href="/">Today</Link> and in the <Link className="underline" href="/pattu">Pattu book</Link>.</p>
             </div>
           )}
         </section>
 
         <section className="min-w-0">
-          {reading && <div className="panel p-6 flex items-center gap-3"><Spinner />Reading every line on the page…</div>}
+          {reading && <div className="panel p-6 flex items-center gap-3"><Spinner />{t("Reading every line on the page…", "പേജിലെ ഓരോ വരിയും വായിക്കുന്നു…")}</div>}
           {entries && (
             <div className="panel overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Found {entries.length} lines</h2>
-                  <p className="text-sm text-muted">Check them, untick anything wrong, then add.</p>
+                  <h2 className="text-lg font-semibold">{ml ? `${entries.length} വരികൾ കിട്ടി` : `Found ${entries.length} lines`}</h2>
+                  <p className="text-sm text-muted">{t("Check them, untick anything wrong, then add.", "നോക്കി ഉറപ്പാക്കൂ, തെറ്റുള്ളത് ഒഴിവാക്കി ചേർക്കൂ.")}</p>
                 </div>
-                <Button onClick={save} busy={saving} disabled={!kept.length}>Add {kept.length} to Kanakku</Button>
+                <Button onClick={save} busy={saving} disabled={!kept.length}>{ml ? `${kept.length} എണ്ണം കണക്കിൽ ചേർക്കൂ` : `Add ${kept.length} to Kanakku`}</Button>
               </div>
               <ul className="border-t border-line">
                 {entries.map((e, i) => {
@@ -107,7 +109,7 @@ export default function Notebook() {
                         <p className="text-sm text-muted italic truncate" title={e.lineText}>“{e.lineText}”</p>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={clsx("rounded px-1.5 py-0.5 text-xs font-semibold", e.kind === "payment" ? "bg-leaf-soft text-leaf" : e.isCredit ? "bg-due-soft text-due" : "bg-pen-soft text-pen-dark")}>
-                            {e.kind === "payment" ? "Payment" : e.isCredit ? "Pattu" : "Sale"}
+                            {e.kind === "payment" ? t("Payment", "അടവ്") : e.isCredit ? t("Pattu", "പറ്റ്") : t("Sale", "വിൽപ്പന")}
                           </span>
                           <input value={e.customerName ?? ""} onChange={(x) => edit(i, { customerName: x.target.value || null })} placeholder="Customer" className={clsx(inputCls, "h-8 w-36 text-sm")} aria-label="Customer" />
                           {e.kind === "sale" && (

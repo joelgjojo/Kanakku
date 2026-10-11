@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { buildSeed } from "../seed";
+import { buildSeed, SEED_CUSTOMERS, SEED_PRODUCTS } from "../seed";
 import type { Bill, Customer, Payment, Product, StockMove } from "../types";
 import type { Store } from "./index";
 
@@ -8,11 +8,15 @@ import type { Store } from "./index";
 
 type Row = Record<string, unknown>;
 
+// Names added to the built-in catalogue later (like the Hindi ones) reach shops that were set up before.
+const seedAliases = new Map([...SEED_PRODUCTS, ...SEED_CUSTOMERS].map((p) => [p.id, p.aliases]));
+const mergeAliases = (id: string, own: string[]) => [...new Set([...own, ...(seedAliases.get(id) ?? [])])];
+
 const toProduct = (r: Row): Product => ({
   id: r.id as string,
   name: r.name as string,
   nameMl: r.name_ml as string,
-  aliases: (r.aliases as string[]) ?? [],
+  aliases: mergeAliases(r.id as string, (r.aliases as string[]) ?? []),
   unit: r.unit as Product["unit"],
   price: Number(r.price),
   costPrice: r.cost_price === null || r.cost_price === undefined ? undefined : Number(r.cost_price),
@@ -34,7 +38,7 @@ const toCustomer = (r: Row): Customer => ({
   id: r.id as string,
   name: r.name as string,
   nameMl: (r.name_ml as string) ?? undefined,
-  aliases: (r.aliases as string[]) ?? [],
+  aliases: mergeAliases(r.id as string, (r.aliases as string[]) ?? []),
   phone: (r.phone as string) ?? undefined,
   createdAt: r.created_at as string,
 });

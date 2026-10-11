@@ -86,6 +86,9 @@ export interface ParsedItem {
   price: number | null;
 }
 
+/** Language the message was in. Manglish counts as "ml". */
+export type Lang = "ml" | "en" | "hi" | "ta" | "bn" | "other";
+
 export interface ParsedMessage {
   intent: Intent;
   transcript: string;
@@ -95,6 +98,7 @@ export interface ParsedMessage {
   amount: number | null; // for payment intent
   confidence: number;
   engine: "gemini" | "offline";
+  lang?: Lang;
 }
 
 export interface NotebookEntry {

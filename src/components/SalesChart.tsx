@@ -1,6 +1,7 @@
 "use client";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { rupees } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
 interface Day { date: string; cash: number; credit: number }
 
@@ -8,15 +9,18 @@ const PEN = "#2f4fb0";
 const MARGIN = "#d2553f";
 
 export function SalesChart({ days }: { days: Day[] }) {
+  const { t, ml } = useLang();
+  const cashLabel = t("Cash and UPI", "ക്യാഷ്, UPI");
+  const pattuLabel = t("Pattu", "പറ്റ്");
   const data = days.map((d, i) => ({
     ...d,
-    label: i === days.length - 1 ? "Today" : new Date(d.date).toLocaleDateString("en-IN", { weekday: "short" }),
+    label: i === days.length - 1 ? t("Today", "ഇന്ന്") : new Date(d.date).toLocaleDateString(ml ? "ml-IN" : "en-IN", { weekday: "short", timeZone: "Asia/Kolkata" }),
   }));
   return (
     <figure>
       <div className="flex items-center gap-4 text-sm text-muted mb-2" aria-hidden>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: PEN }} />Cash and UPI</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: MARGIN }} />Pattu</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: PEN }} />{cashLabel}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: MARGIN }} />{pattuLabel}</span>
       </div>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -27,7 +31,7 @@ export function SalesChart({ days }: { days: Day[] }) {
             <Tooltip
               cursor={{ fill: "rgba(47,79,176,0.06)" }}
               contentStyle={{ borderRadius: 10, border: "1px solid #d9dedb", fontFamily: "inherit", fontSize: 13 }}
-              formatter={(v, name) => [rupees(Number(v)), name === "cash" ? "Cash and UPI" : "Pattu"]}
+              formatter={(v, name) => [rupees(Number(v)), name === "cash" ? cashLabel : pattuLabel]}
               labelFormatter={(l, p) => {
                 const row = p?.[0]?.payload as (Day & { label: string }) | undefined;
                 return row ? `${l}: ${rupees(row.cash + row.credit)}` : l;

@@ -71,7 +71,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ code:
             {recent.length === 0 && <li className="ledger-row pl-14 text-faint">No entries yet.</li>}
             {recent.map((r) => (
               <li key={r.id} className="ledger-row grid grid-cols-[2.75rem_1fr_auto] pr-4 text-[0.92rem] gap-2">
-                <span className="text-xs text-muted text-center num">{new Date(r.at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                <span className="text-xs text-muted text-center num">{new Date(r.at).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}</span>
                 <span className="truncate">{r.kind === "payment" ? "Paid, thank you" : r.text}</span>
                 <span className={`num font-semibold ${r.kind === "credit" ? "text-due" : "text-leaf"}`}>
                   {r.kind === "credit" ? "+" : "−"}

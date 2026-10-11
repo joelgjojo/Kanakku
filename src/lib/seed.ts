@@ -1,3 +1,4 @@
+import { atIST, startOfDay } from "./format";
 import type { Bill, BillItem, Customer, Payment, Product, StockMove } from "./types";
 
 export interface DB {
@@ -10,35 +11,35 @@ export interface DB {
 
 // A typical Kollam neighbourhood kada. Prices are rough 2026 retail prices.
 export const SEED_PRODUCTS: Product[] = [
-  { id: "p-matta-rice", name: "Matta rice", nameMl: "മട്ട അരി", aliases: ["rice", "ari", "matta", "kuthari", "കുത്തരി", "അരി"], unit: "kg", price: 56, stock: 14, lowStockAt: 20, category: "Grains" },
-  { id: "p-ponni-rice", name: "Ponni rice", nameMl: "പൊന്നി അരി", aliases: ["ponni", "white rice", "വെള്ള അരി"], unit: "kg", price: 52, stock: 38, lowStockAt: 15, category: "Grains" },
-  { id: "p-sugar", name: "Sugar", nameMl: "പഞ്ചസാര", aliases: ["panchasara", "panjasara", "sugar"], unit: "kg", price: 48, stock: 9, lowStockAt: 10, category: "Grocery" },
-  { id: "p-coconut-oil", name: "Coconut oil", nameMl: "വെളിച്ചെണ്ണ", aliases: ["velichenna", "oil", "enna", "എണ്ണ"], unit: "l", price: 290, stock: 11, lowStockAt: 5, category: "Oil" },
-  { id: "p-tea", name: "Tea powder", nameMl: "ചായപ്പൊടി", aliases: ["chaya podi", "chayapodi", "tea", "ചായപൊടി"], unit: "pkt", price: 65, stock: 22, lowStockAt: 8, category: "Beverages" },
-  { id: "p-milk", name: "Milk", nameMl: "പാൽ", aliases: ["paal", "pal", "milma", "മിൽമ"], unit: "pkt", price: 30, stock: 18, lowStockAt: 20, category: "Dairy" },
-  { id: "p-egg", name: "Egg", nameMl: "മുട്ട", aliases: ["mutta", "eggs"], unit: "pc", price: 7, stock: 96, lowStockAt: 30, category: "Dairy" },
-  { id: "p-soap", name: "Bath soap", nameMl: "സോപ്പ്", aliases: ["soap", "sopp", "lux", "medimix"], unit: "pc", price: 38, stock: 30, lowStockAt: 10, category: "Personal care" },
-  { id: "p-salt", name: "Salt", nameMl: "ഉപ്പ്", aliases: ["uppu", "salt"], unit: "pkt", price: 24, stock: 25, lowStockAt: 8, category: "Grocery" },
-  { id: "p-chilli", name: "Chilli powder", nameMl: "മുളകുപൊടി", aliases: ["mulaku podi", "mulakupodi", "chilli"], unit: "pkt", price: 42, stock: 16, lowStockAt: 6, category: "Spices" },
-  { id: "p-turmeric", name: "Turmeric powder", nameMl: "മഞ്ഞൾപ്പൊടി", aliases: ["manjal podi", "manjal", "turmeric"], unit: "pkt", price: 28, stock: 4, lowStockAt: 5, category: "Spices" },
-  { id: "p-atta", name: "Wheat flour", nameMl: "ആട്ട", aliases: ["atta", "gothambu podi", "ഗോതമ്പ് പൊടി", "wheat"], unit: "kg", price: 46, stock: 20, lowStockAt: 8, category: "Grains" },
-  { id: "p-rava", name: "Rava", nameMl: "റവ", aliases: ["rava", "sooji", "semolina"], unit: "kg", price: 50, stock: 12, lowStockAt: 5, category: "Grains" },
-  { id: "p-dal", name: "Toor dal", nameMl: "പരിപ്പ്", aliases: ["parippu", "dal", "thuvara"], unit: "kg", price: 150, stock: 7, lowStockAt: 5, category: "Pulses" },
-  { id: "p-green-gram", name: "Green gram", nameMl: "ചെറുപയർ", aliases: ["cherupayar", "moong", "payar"], unit: "kg", price: 120, stock: 9, lowStockAt: 4, category: "Pulses" },
-  { id: "p-onion", name: "Onion", nameMl: "സവാള", aliases: ["savala", "onion", "ഉള്ളി", "ulli"], unit: "kg", price: 40, stock: 18, lowStockAt: 10, category: "Vegetables" },
-  { id: "p-small-onion", name: "Shallots", nameMl: "ചെറിയ ഉള്ളി", aliases: ["cheriya ulli", "small onion", "shallot"], unit: "kg", price: 80, stock: 6, lowStockAt: 4, category: "Vegetables" },
-  { id: "p-biscuit", name: "Biscuit packet", nameMl: "ബിസ്കറ്റ്", aliases: ["biscuit", "parle", "good day"], unit: "pkt", price: 10, stock: 60, lowStockAt: 20, category: "Snacks" },
-  { id: "p-detergent", name: "Detergent", nameMl: "സോപ്പുപൊടി", aliases: ["soap podi", "soppu podi", "surf", "detergent", "washing powder"], unit: "pkt", price: 120, stock: 3, lowStockAt: 5, category: "Household" },
-  { id: "p-matchbox", name: "Matchbox", nameMl: "തീപ്പെട്ടി", aliases: ["theepetti", "match", "matchbox"], unit: "pc", price: 2, stock: 140, lowStockAt: 30, category: "Household" },
+  { id: "p-matta-rice", name: "Matta rice", nameMl: "മട്ട അരി", aliases: ["rice", "ari", "matta", "kuthari", "കുത്തരി", "അരി", "chawal", "chaawal", "चावल"], unit: "kg", price: 56, stock: 14, lowStockAt: 20, category: "Grains" },
+  { id: "p-ponni-rice", name: "Ponni rice", nameMl: "പൊന്നി അരി", aliases: ["ponni", "white rice", "വെള്ള അരി", "ponni chawal", "safed chawal"], unit: "kg", price: 52, stock: 38, lowStockAt: 15, category: "Grains" },
+  { id: "p-sugar", name: "Sugar", nameMl: "പഞ്ചസാര", aliases: ["panchasara", "panjasara", "sugar", "cheeni", "chini", "चीनी"], unit: "kg", price: 48, stock: 9, lowStockAt: 10, category: "Grocery" },
+  { id: "p-coconut-oil", name: "Coconut oil", nameMl: "വെളിച്ചെണ്ണ", aliases: ["velichenna", "oil", "enna", "എണ്ണ", "nariyal tel", "tel", "नारियल तेल", "तेल"], unit: "l", price: 290, stock: 11, lowStockAt: 5, category: "Oil" },
+  { id: "p-tea", name: "Tea powder", nameMl: "ചായപ്പൊടി", aliases: ["chaya podi", "chayapodi", "tea", "ചായപൊടി", "chai patti", "chai", "चाय पत्ती", "चाय"], unit: "pkt", price: 65, stock: 22, lowStockAt: 8, category: "Beverages" },
+  { id: "p-milk", name: "Milk", nameMl: "പാൽ", aliases: ["paal", "pal", "milma", "മിൽമ", "doodh", "dudh", "दूध"], unit: "pkt", price: 30, stock: 18, lowStockAt: 20, category: "Dairy" },
+  { id: "p-egg", name: "Egg", nameMl: "മുട്ട", aliases: ["mutta", "eggs", "anda", "ande", "अंडा", "अंडे"], unit: "pc", price: 7, stock: 96, lowStockAt: 30, category: "Dairy" },
+  { id: "p-soap", name: "Bath soap", nameMl: "സോപ്പ്", aliases: ["soap", "sopp", "lux", "medimix", "sabun", "साबुन"], unit: "pc", price: 38, stock: 30, lowStockAt: 10, category: "Personal care" },
+  { id: "p-salt", name: "Salt", nameMl: "ഉപ്പ്", aliases: ["uppu", "salt", "namak", "नमक"], unit: "pkt", price: 24, stock: 25, lowStockAt: 8, category: "Grocery" },
+  { id: "p-chilli", name: "Chilli powder", nameMl: "മുളകുപൊടി", aliases: ["mulaku podi", "mulakupodi", "chilli", "mirchi", "lal mirch", "मिर्च"], unit: "pkt", price: 42, stock: 16, lowStockAt: 6, category: "Spices" },
+  { id: "p-turmeric", name: "Turmeric powder", nameMl: "മഞ്ഞൾപ്പൊടി", aliases: ["manjal podi", "manjal", "turmeric", "haldi", "हल्दी"], unit: "pkt", price: 28, stock: 4, lowStockAt: 5, category: "Spices" },
+  { id: "p-atta", name: "Wheat flour", nameMl: "ആട്ട", aliases: ["atta", "gothambu podi", "ഗോതമ്പ് പൊടി", "wheat", "aata", "आटा"], unit: "kg", price: 46, stock: 20, lowStockAt: 8, category: "Grains" },
+  { id: "p-rava", name: "Rava", nameMl: "റവ", aliases: ["rava", "sooji", "semolina", "suji", "सूजी"], unit: "kg", price: 50, stock: 12, lowStockAt: 5, category: "Grains" },
+  { id: "p-dal", name: "Toor dal", nameMl: "പരിപ്പ്", aliases: ["parippu", "dal", "thuvara", "arhar dal", "toor dal", "दाल"], unit: "kg", price: 150, stock: 7, lowStockAt: 5, category: "Pulses" },
+  { id: "p-green-gram", name: "Green gram", nameMl: "ചെറുപയർ", aliases: ["cherupayar", "moong", "payar", "moong dal", "मूंग"], unit: "kg", price: 120, stock: 9, lowStockAt: 4, category: "Pulses" },
+  { id: "p-onion", name: "Onion", nameMl: "സവാള", aliases: ["savala", "onion", "ഉള്ളി", "ulli", "pyaz", "pyaaz", "प्याज"], unit: "kg", price: 40, stock: 18, lowStockAt: 10, category: "Vegetables" },
+  { id: "p-small-onion", name: "Shallots", nameMl: "ചെറിയ ഉള്ളി", aliases: ["cheriya ulli", "small onion", "shallot", "chhota pyaz", "छोटा प्याज"], unit: "kg", price: 80, stock: 6, lowStockAt: 4, category: "Vegetables" },
+  { id: "p-biscuit", name: "Biscuit packet", nameMl: "ബിസ്കറ്റ്", aliases: ["biscuit", "parle", "good day", "biskut", "बिस्किट"], unit: "pkt", price: 10, stock: 60, lowStockAt: 20, category: "Snacks" },
+  { id: "p-detergent", name: "Detergent", nameMl: "സോപ്പുപൊടി", aliases: ["soap podi", "soppu podi", "surf", "detergent", "washing powder", "kapde ka powder", "सर्फ"], unit: "pkt", price: 120, stock: 3, lowStockAt: 5, category: "Household" },
+  { id: "p-matchbox", name: "Matchbox", nameMl: "തീപ്പെട്ടി", aliases: ["theepetti", "match", "matchbox", "machis", "माचिस"], unit: "pc", price: 2, stock: 140, lowStockAt: 30, category: "Household" },
 ];
 
-const SEED_CUSTOMERS: Omit<Customer, "createdAt">[] = [
-  { id: "c-rajan", name: "Rajan", nameMl: "രാജൻ", aliases: ["rajan chettan", "രാജന്", "രാജേട്ടൻ"], phone: "919400000001" },
-  { id: "c-suma", name: "Suma", nameMl: "സുമ", aliases: ["suma chechi", "സുമ ചേച്ചി", "സുമയ്ക്ക്"], phone: "919400000002" },
-  { id: "c-babu", name: "Babu", nameMl: "ബാബു", aliases: ["babu chettan", "ബാബുവിന്", "ബാബുന്"], phone: "919400000003" },
-  { id: "c-ammu", name: "Ammu", nameMl: "അമ്മു", aliases: ["അമ്മുവിന്"], phone: "919400000004" },
-  { id: "c-shaji", name: "Shaji", nameMl: "ഷാജി", aliases: ["shaji chettan", "ഷാജിക്ക്"], phone: "919400000005" },
-  { id: "c-leela", name: "Leela teacher", nameMl: "ലീല ടീച്ചർ", aliases: ["leela", "ലീല", "teacher", "ടീച്ചർ"], phone: "919400000006" },
+export const SEED_CUSTOMERS: Omit<Customer, "createdAt">[] = [
+  { id: "c-rajan", name: "Rajan", nameMl: "രാജൻ", aliases: ["rajan chettan", "രാജന്", "രാജേട്ടൻ", "राजन"], phone: "919400000001" },
+  { id: "c-suma", name: "Suma", nameMl: "സുമ", aliases: ["suma chechi", "സുമ ചേച്ചി", "സുമയ്ക്ക്", "सुमा"], phone: "919400000002" },
+  { id: "c-babu", name: "Babu", nameMl: "ബാബു", aliases: ["babu chettan", "ബാബുവിന്", "ബാബുന്", "बाबू"], phone: "919400000003" },
+  { id: "c-ammu", name: "Ammu", nameMl: "അമ്മു", aliases: ["അമ്മുവിന്", "अम्मू"], phone: "919400000004" },
+  { id: "c-shaji", name: "Shaji", nameMl: "ഷാജി", aliases: ["shaji chettan", "ഷാജിക്ക്", "शाजी"], phone: "919400000005" },
+  { id: "c-leela", name: "Leela teacher", nameMl: "ലീല ടീച്ചർ", aliases: ["leela", "ലീല", "teacher", "ടീച്ചർ", "लीला", "टीचर"], phone: "919400000006" },
 ];
 
 // Small deterministic PRNG so every reset gives the same believable history.
@@ -116,18 +117,15 @@ export function buildSeed(now = new Date()): DB {
   const creditPool = ["c-rajan", "c-rajan", "c-leela", "c-leela", "c-leela", "c-suma", "c-babu", "c-babu", "c-shaji", "c-ammu", "c-ammu"];
 
   for (let d = 27; d >= 0; d--) {
-    const day = new Date(now);
-    day.setDate(day.getDate() - d);
     // Today: a morning's worth of bills, all before "now" so the demo never looks empty.
     const isToday = d === 0;
     const billsToday = Math.floor((isToday ? 0.45 : 1) * (22 + rand() * 14));
-    const dayStart = new Date(day);
-    dayStart.setHours(0, 0, 0, 0);
+    const dayStart = startOfDay(new Date(now.getTime() - d * 86400000));
     const todayFrom = Math.max(dayStart.getTime(), now.getTime() - 8 * 3600000);
     for (let b = 0; b < billsToday; b++) {
-      const at = new Date(day);
-      if (isToday) at.setTime(todayFrom + rand() * (now.getTime() - 60000 - todayFrom));
-      else at.setHours(7 + Math.floor(rand() * 15), Math.floor(rand() * 60), Math.floor(rand() * 60), 0);
+      const at = isToday
+        ? new Date(todayFrom + rand() * (now.getTime() - 60000 - todayFrom))
+        : atIST(dayStart, 7 + Math.floor(rand() * 15), Math.floor(rand() * 60), Math.floor(rand() * 60));
 
       const lines = 1 + Math.floor(rand() * 3);
       const used = new Set<string>();
@@ -165,8 +163,7 @@ export function buildSeed(now = new Date()): DB {
         const due = owed.get(cid) ?? 0;
         if (!h.share || due < 50 || (d + cid.length) % h.every !== 0) continue;
         const amount = Math.max(50, Math.round((due * h.share) / 10) * 10);
-        const at = new Date(day);
-        at.setHours(18, 15 + Math.floor(rand() * 40), 0, 0);
+        const at = atIST(dayStart, 18, 15 + Math.floor(rand() * 40));
         payments.push({ id: `pay-seed-${d}-${cid}`, createdAt: at.toISOString(), customerId: cid, amount, note: "Paid", source: rand() < 0.5 ? "manual" : "whatsapp" });
         owed.set(cid, due - amount);
       }

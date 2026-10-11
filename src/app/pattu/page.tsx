@@ -8,6 +8,7 @@ import { rupees } from "@/lib/format";
 import type { Balance } from "@/lib/kanakku";
 import type { Source } from "@/lib/types";
 import { Button, ErrorNote, Money, PageHeader, SourceIcon, Spinner, inputCls } from "@/components/ui";
+import { trustLabel, trustReason, useLang } from "@/lib/i18n";
 
 interface Entry { id: string; at: string; kind: "credit" | "payment"; amount: number; source: Source; text: string }
 type Detail = Balance & { entries: Entry[]; link: string; upi: string | null };
@@ -20,9 +21,10 @@ const TRUST_CLS: Record<Balance["trust"]["label"], string> = {
 };
 
 function TrustBadge({ t }: { t: Balance["trust"] }) {
+  const { ml } = useLang();
   return (
     <span title={t.reason} className={clsx("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold", TRUST_CLS[t.label])}>
-      {t.label} <span className="num font-normal opacity-80">{t.score}</span>
+      {trustLabel(t.label, ml)} <span className="num font-normal opacity-80">{t.score}</span>
     </span>
   );
 }
@@ -45,6 +47,7 @@ function Pattu() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [showAll, setShowAll] = useState(false);
   const selected = params.get("c");
+  const { t, ml } = useLang();
 
   const loadList = useCallback(() => api<Balance[]>("/api/customers").then(setList), []);
   const loadDetail = useCallback((id: string) => api<Detail>(`/api/customers/${id}`).then(setDetail), []);
@@ -60,8 +63,8 @@ function Pattu() {
 
   return (
     <>
-      <PageHeader title="Pattu book" ml="പറ്റ് പുസ്തകം">
-        {list && <p className="text-right"><span className="text-sm text-muted block">Total pending</span><span className="sign num text-3xl text-due">{rupees(total)}</span></p>}
+      <PageHeader title="Pattu book" titleMl="പറ്റ് പുസ്തകം" ml="പറ്റ് പുസ്തകം">
+        {list && <p className="text-right"><span className="text-sm text-muted block">{t("Total pending", "ആകെ കിട്ടാനുള്ളത്")}</span><span className="sign num text-3xl text-due">{rupees(total)}</span></p>}
       </PageHeader>
       <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] lg:items-start">
         <section className={clsx("panel overflow-hidden", selected && "hidden lg:block")}>
@@ -81,7 +84,7 @@ function Pattu() {
                         <span className="block font-semibold truncate">{b.customer.nameMl ?? b.customer.name} <span className="font-normal text-sm text-muted">{b.customer.nameMl ? b.customer.name : ""}</span></span>
                         <span className={clsx("flex items-center gap-2 text-sm", b.oldestUnpaidDays > 7 ? "text-warn" : "text-muted")}>
                           <TrustBadge t={b.trust} />
-                          <span className="truncate">{b.due <= 0 ? "All clear" : b.oldestUnpaidDays > 0 ? `unpaid ${b.oldestUnpaidDays} days` : "since today"}</span>
+                          <span className="truncate">{b.due <= 0 ? t("All clear", "ബാക്കിയില്ല") : b.oldestUnpaidDays > 0 ? (ml ? `${b.oldestUnpaidDays} ദിവസമായി ബാക്കി` : `unpaid ${b.oldestUnpaidDays} days`) : t("since today", "ഇന്ന് മുതൽ")}</span>
                         </span>
                       </span>
                       <Money value={Math.max(0, b.due)} className={clsx("font-semibold", b.due > 0 ? "text-due" : "text-leaf")} />
@@ -91,7 +94,7 @@ function Pattu() {
               </ul>
               <div className="flex items-center justify-between px-5 py-3 border-t border-line">
                 <button onClick={() => setShowAll((s) => !s)} className="text-sm text-pen font-semibold">
-                  {showAll ? "Only people who owe" : `Show all ${list.length} customers`}
+                  {showAll ? t("Only people who owe", "ബാക്കിയുള്ളവർ മാത്രം") : ml ? `എല്ലാ ${list.length} പേരെയും കാണിക്കൂ` : `Show all ${list.length} customers`}
                 </button>
               </div>
               <AddCustomer onAdded={loadList} />
@@ -101,7 +104,7 @@ function Pattu() {
 
         {selected && (
           <section className="min-w-0">
-            <button onClick={() => router.push("/pattu")} className="lg:hidden mb-3 text-pen font-semibold text-sm">← All customers</button>
+            <button onClick={() => router.push("/pattu")} className="lg:hidden mb-3 text-pen font-semibold text-sm">← {t("All customers", "എല്ലാവരും")}</button>
             {!detail || detail.customer.id !== selected ? <Spinner /> : (
               <CustomerPage d={detail} onChange={() => { loadDetail(selected); loadList(); }} />
             )}
@@ -119,6 +122,7 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [paid, setPaid] = useState<number | null>(null);
   const ledgerRef = useRef<HTMLOListElement>(null);
+  const { t, ml } = useLang();
   // Open at the newest entries, like turning to the last page of the book.
   useEffect(() => { if (ledgerRef.current) ledgerRef.current.scrollTop = ledgerRef.current.scrollHeight; }, [d.entries.length, d.customer.id]);
 
@@ -161,32 +165,34 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
             {d.customer.nameMl && <p className="text-muted">{d.customer.name}</p>}
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <TrustBadge t={d.trust} />
-              <span className="text-muted">{d.trust.reason}</span>
+              <span className="text-muted">{trustReason(d, ml)}</span>
             </p>
-            <p className="text-sm text-muted mt-0.5">Suggested pattu limit <b className="num text-ink">{rupees(d.trust.limit)}</b></p>
+            <p className="text-sm text-muted mt-0.5">{t("Suggested pattu limit", "നിർദ്ദേശിക്കുന്ന പറ്റ് പരിധി")} <b className="num text-ink">{rupees(d.trust.limit)}</b></p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-muted">{d.due > 0 ? "Owes you" : "Balance"}</p>
+            <p className="text-sm text-muted">{d.due > 0 ? t("Owes you", "തരാനുള്ളത്") : t("Balance", "ബാക്കി")}</p>
             <p className={clsx("sign num text-4xl", d.due > 0 ? "text-due" : "text-leaf")}>{rupees(Math.max(0, d.due))}</p>
           </div>
         </div>
         {overLimit && (
           <p className="mt-3 flex items-start gap-2 rounded-lg bg-due-soft px-3 py-2 text-sm text-due">
             <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-            Over the suggested limit by {rupees(d.due - d.trust.limit)}. Collect some before giving more pattu.
+            {ml
+              ? `പരിധിയേക്കാൾ ${rupees(d.due - d.trust.limit)} കൂടുതൽ. ഇനി പറ്റ് കൊടുക്കും മുൻപ് കുറച്ച് വാങ്ങിക്കൂ.`
+              : `Over the suggested limit by ${rupees(d.due - d.trust.limit)}. Collect some before giving more pattu.`}
           </p>
         )}
-        {paid !== null && <p className="mt-3 rounded-lg bg-leaf-soft px-3 py-2 text-sm text-leaf font-semibold slip-in">Payment of {rupees(paid)} added.</p>}
+        {paid !== null && <p className="mt-3 rounded-lg bg-leaf-soft px-3 py-2 text-sm text-leaf font-semibold slip-in">{ml ? `${rupees(paid)} അടച്ചത് ചേർത്തു.` : `Payment of ${rupees(paid)} added.`}</p>}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <form onSubmit={pay} className="flex gap-2">
-            <label className="sr-only" htmlFor="amt">Amount paid</label>
-            <input id="amt" type="number" inputMode="decimal" min={1} step="any" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount paid ₹" className={inputCls} />
-            <Button type="submit" busy={busy} disabled={!amount} variant="primary" className="bg-leaf hover:bg-[#23643d] shrink-0"><Wallet size={16} />Paid</Button>
+            <label className="sr-only" htmlFor="amt">{t("Amount paid", "അടച്ച തുക")}</label>
+            <input id="amt" type="number" inputMode="decimal" min={1} step="any" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t("Amount paid ₹", "അടച്ച തുക ₹")} className={inputCls} />
+            <Button type="submit" busy={busy} disabled={!amount} variant="primary" className="bg-leaf hover:bg-[#23643d] shrink-0"><Wallet size={16} />{t("Paid", "അടച്ചു")}</Button>
           </form>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={savePhone} inputMode="tel" placeholder="WhatsApp number" className={clsx(inputCls, "pl-8")} aria-label="WhatsApp number" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={savePhone} inputMode="tel" placeholder={t("WhatsApp number", "വാട്സ്ആപ്പ് നമ്പർ")} className={clsx(inputCls, "pl-8")} aria-label={t("WhatsApp number", "വാട്സ്ആപ്പ് നമ്പർ")} />
             </div>
             <a
               href={waLink(phone, reminder)}
@@ -195,31 +201,33 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
               aria-disabled={d.due <= 0}
               className={clsx("inline-flex items-center gap-2 h-10 rounded-lg border border-line px-3 text-sm font-semibold shrink-0", d.due <= 0 ? "pointer-events-none opacity-40" : "hover:bg-wall")}
             >
-              <Bell size={15} /> Remind
+              <Bell size={15} /> {t("Remind", "ഓർമ്മിപ്പിക്കൂ")}
             </a>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <PayQr upi={d.upi} due={d.due} />
           <a href={d.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 h-9 rounded-lg border border-line px-3 text-sm font-semibold hover:bg-wall">
-            <Link2 size={15} /> {d.customer.name}&apos;s page
+            <Link2 size={15} /> {ml ? `${nameMl}-ന്റെ പേജ്` : `${d.customer.name}'s page`}
           </a>
         </div>
         <ErrorNote>{err}</ErrorNote>
-        <p className="mt-3 text-xs text-muted">Reminders open in WhatsApp with the message and {d.customer.name}&apos;s own pattu page link ready. Nothing goes out until you press send.</p>
+        <p className="mt-3 text-xs text-muted">{ml
+          ? `ഓർമ്മിപ്പിക്കൽ മെസ്സേജും ${nameMl}-ന്റെ പറ്റ് പേജ് ലിങ്കും വാട്സ്ആപ്പിൽ തയ്യാറായി തുറക്കും. നിങ്ങൾ Send അമർത്തിയാലേ പോകൂ.`
+          : `Reminders open in WhatsApp with the message and ${d.customer.name}'s own pattu page link ready. Nothing goes out until you press send.`}</p>
       </div>
 
       <div className="panel overflow-hidden">
         <div className="grid grid-cols-[2.75rem_3.75rem_1fr_4.75rem_5rem] items-end px-0 pr-4 pt-3 pb-1 text-xs text-muted border-b border-line">
-          <span /><span className="pl-2">Date</span><span>Entry</span><span className="text-right">Amount</span><span className="text-right">Balance</span>
+          <span /><span className="pl-2">{t("Date", "തീയതി")}</span><span>{t("Entry", "വിവരം")}</span><span className="text-right">{t("Amount", "തുക")}</span><span className="text-right">{t("Balance", "ബാക്കി")}</span>
         </div>
         <ol ref={ledgerRef} className="ledger max-h-[32rem] overflow-y-auto">
-          {rows.length === 0 && <li className="ledger-row pl-14 text-faint">No entries yet.</li>}
+          {rows.length === 0 && <li className="ledger-row pl-14 text-faint">{t("No entries yet.", "ഇതുവരെ ഒന്നുമില്ല.")}</li>}
           {rows.map((r) => (
             <li key={r.id} className="ledger-row grid grid-cols-[2.75rem_3.75rem_1fr_4.75rem_5rem] pr-4 text-[0.92rem]">
               <span className="grid place-items-center"><SourceIcon source={r.source} size={14} /></span>
-              <span className="pl-2 text-muted num text-sm">{new Date(r.at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-              <span className="truncate pr-2">{r.text}</span>
+              <span className="pl-2 text-muted num text-sm">{new Date(r.at).toLocaleDateString("en-IN", ml ? { day: "numeric", month: "numeric" } : { day: "numeric", month: "short" })}</span>
+              <span className="truncate pr-2">{ml && r.text === "Paid" ? "അടച്ചു" : r.text}</span>
               <span className={clsx("num text-right", r.kind === "credit" ? "text-due" : "text-leaf")}>
                 {r.kind === "credit" ? "+" : "−"}{rupees(r.amount)}
               </span>
@@ -238,8 +246,9 @@ function AddCustomer({ onAdded }: { onAdded: () => void }) {
   const [nameMl, setNameMl] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
+  const { t } = useLang();
   if (!open) return (
-    <div className="px-5 pb-4"><Button variant="outline" onClick={() => setOpen(true)}><Plus size={16} />Add customer</Button></div>
+    <div className="px-5 pb-4"><Button variant="outline" onClick={() => setOpen(true)}><Plus size={16} />{t("Add customer", "ആളെ ചേർക്കൂ")}</Button></div>
   );
   return (
     <form
@@ -252,10 +261,10 @@ function AddCustomer({ onAdded }: { onAdded: () => void }) {
         onAdded();
       }}
     >
-      <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (English)" className={inputCls} />
-      <input value={nameMl} onChange={(e) => setNameMl(e.target.value)} placeholder="പേര് (Malayalam, optional)" className={inputCls} />
-      <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="WhatsApp number with 91" inputMode="tel" className={inputCls} />
-      <div className="flex gap-2"><Button type="submit" busy={busy}>Add customer</Button><Button type="button" variant="quiet" onClick={() => setOpen(false)}>Cancel</Button></div>
+      <input required value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Name (English)", "പേര് (ഇംഗ്ലീഷിൽ)")} className={inputCls} />
+      <input value={nameMl} onChange={(e) => setNameMl(e.target.value)} placeholder={t("പേര് (Malayalam, optional)", "പേര് (മലയാളത്തിൽ, വേണമെങ്കിൽ)")} className={inputCls} />
+      <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("WhatsApp number with 91", "91 ചേർത്ത വാട്സ്ആപ്പ് നമ്പർ")} inputMode="tel" className={inputCls} />
+      <div className="flex gap-2"><Button type="submit" busy={busy}>{t("Add customer", "ആളെ ചേർക്കൂ")}</Button><Button type="button" variant="quiet" onClick={() => setOpen(false)}>{t("Cancel", "വേണ്ട")}</Button></div>
     </form>
   );
 }
@@ -264,6 +273,7 @@ function AddCustomer({ onAdded }: { onAdded: () => void }) {
 function PayQr({ upi, due }: { upi: string | null; due: number }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const { t, ml } = useLang();
   useEffect(() => { setOpen(false); setSvg(null); }, [upi]);
   // No UPI ID set for the shop: customers pay at the counter, so there's nothing to show.
   if (due <= 0 || !upi) return null;
@@ -279,12 +289,12 @@ function PayQr({ upi, due }: { upi: string | null; due: number }) {
         }}
         className="inline-flex items-center gap-2 h-9 rounded-lg bg-ink text-paper px-3 text-sm font-semibold"
       >
-        <QrCode size={15} /> {open ? "Hide QR" : `Scan to pay ${rupees(due)}`}
+        <QrCode size={15} /> {open ? t("Hide QR", "QR മറയ്ക്കൂ") : ml ? `${rupees(due)} അടയ്ക്കാൻ സ്കാൻ ചെയ്യൂ` : `Scan to pay ${rupees(due)}`}
       </button>
       {open && svg && (
         <div className="w-full flex flex-col items-center gap-1 py-3 slip-in">
           <div className="w-56" dangerouslySetInnerHTML={{ __html: svg }} />
-          <p className="text-sm text-muted">Any UPI app. Amount is filled in: <b className="num text-ink">{rupees(due)}</b></p>
+          <p className="text-sm text-muted">{t("Any UPI app. Amount is filled in:", "ഏത് UPI ആപ്പും. തുക തനിയെ വരും:")} <b className="num text-ink">{rupees(due)}</b></p>
         </div>
       )}
     </>

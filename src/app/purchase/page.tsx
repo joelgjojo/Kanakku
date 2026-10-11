@@ -7,6 +7,7 @@ import { api, compressImage } from "@/lib/client";
 import { qtyLabel, rupees, unitLabel } from "@/lib/format";
 import type { PurchaseLine } from "@/lib/types";
 import type { PurchaseOutcome } from "@/lib/kanakku";
+import { useLang } from "@/lib/i18n";
 import { Button, ErrorNote, PageHeader, Spinner } from "@/components/ui";
 
 type Line = PurchaseLine & { sellPrice: number | null; oldCost: number | null; keep: boolean };
@@ -14,6 +15,7 @@ type Line = PurchaseLine & { sellPrice: number | null; oldCost: number | null; k
 const marginOf = (sell: number | null, cost: number) => (sell && cost ? Math.round(((sell - cost) / sell) * 1000) / 10 : null);
 
 export default function Purchase() {
+  const { t, ml } = useLang();
   const [preview, setPreview] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [reading, setReading] = useState(false);
@@ -59,19 +61,23 @@ export default function Purchase() {
 
   return (
     <>
-      <PageHeader title="Supplier bill" ml="ബിൽ ഫോട്ടോ എടുത്താൽ സ്റ്റോക്കും ലാഭവും റെഡി" />
+      <PageHeader title="Supplier bill" titleMl="സപ്ലയർ ബിൽ" ml="ബിൽ ഫോട്ടോ എടുത്താൽ സ്റ്റോക്കും ലാഭവും റെഡി" />
       <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
           <p className="text-muted">
-            Photograph the bill from your wholesaler. Kanakku adds the stock and learns what each item really costs you, so it can show your <b className="text-ink">real profit</b>.
+            {ml ? (
+              <>മൊത്തക്കച്ചവടക്കാരന്റെ ബില്ലിന്റെ ഫോട്ടോ എടുക്കൂ. സ്റ്റോക്ക് ചേർക്കും, ഓരോ സാധനത്തിനും ശരിക്കും എത്ര ചെലവായെന്ന് പഠിക്കും. അങ്ങനെ <b className="text-ink">യഥാർത്ഥ ലാഭം</b> കാണിക്കും.</>
+            ) : (
+              <>Photograph the bill from your wholesaler. Kanakku adds the stock and learns what each item really costs you, so it can show your <b className="text-ink">real profit</b>.</>
+            )}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg bg-ink text-paper font-semibold cursor-pointer hover:bg-pen-dark">
-              <Camera size={26} />Take photo
+              <Camera size={26} />{t("Take photo", "ഫോട്ടോ എടുക്കൂ")}
               <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg border border-line font-semibold cursor-pointer hover:bg-wall">
-              <ImagePlus size={26} />Choose from gallery
+              <ImagePlus size={26} />{t("Choose from gallery", "ഗാലറിയിൽ നിന്ന്")}
               <input type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
           </div>
@@ -79,19 +85,19 @@ export default function Purchase() {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="Supplier bill to read" className="w-full rounded-lg border border-line" />
-              {!lines && <Button onClick={read} busy={reading} className="w-full h-12 text-base">{reading ? "Reading the bill…" : "Read this bill"}</Button>}
+              {!lines && <Button onClick={read} busy={reading} className="w-full h-12 text-base">{reading ? t("Reading the bill…", "ബിൽ വായിക്കുന്നു…") : t("Read this bill", "ഈ ബിൽ വായിക്കൂ")}</Button>}
             </>
           )}
           <ErrorNote>{err}</ErrorNote>
-          <p className="text-sm text-muted">On WhatsApp: send the photo with the caption <b className="text-ink">bill</b>.</p>
+          <p className="text-sm text-muted">{t("On WhatsApp: send the photo with the caption", "വാട്സ്ആപ്പിൽ: ഫോട്ടോയ്ക്കൊപ്പം ക്യാപ്ഷൻ")} <b className="text-ink">bill</b>.</p>
         </section>
 
         <section className="min-w-0 space-y-4">
-          {reading && <div className="panel p-6 flex items-center gap-3"><Spinner />Reading items, pack sizes and prices…</div>}
+          {reading && <div className="panel p-6 flex items-center gap-3"><Spinner />{t("Reading items, pack sizes and prices…", "സാധനങ്ങളും അളവും വിലയും വായിക്കുന്നു…")}</div>}
 
           {done && (
             <div className="panel p-5 slip-in">
-              <p className="font-semibold text-leaf flex items-center gap-2"><Check size={18} />Stock added for {done.length} items</p>
+              <p className="font-semibold text-leaf flex items-center gap-2"><Check size={18} />{ml ? `${done.length} സാധനങ്ങളുടെ സ്റ്റോക്ക് ചേർത്തു` : `Stock added for ${done.length} items`}</p>
               <ul className="mt-3 divide-y divide-line">
                 {done.map((d) => (
                   <li key={d.product.id} className="py-2 flex items-center gap-3">
@@ -103,7 +109,7 @@ export default function Purchase() {
                   </li>
                 ))}
               </ul>
-              {done.some((d) => d.marginPct < 5) && <p className="mt-2 text-sm text-due">Very low margin on some items. Check their selling price on the Stock page.</p>}
+              {done.some((d) => d.marginPct < 5) && <p className="mt-2 text-sm text-due">{t("Very low margin on some items. Check their selling price on the Stock page.", "ചില സാധനങ്ങൾക്ക് ലാഭം വളരെ കുറവാണ്. സ്റ്റോക്ക് പേജിൽ വിൽപ്പന വില നോക്കൂ.")}</p>}
               <Link href="/stock" className="mt-3 inline-block text-pen font-semibold text-sm">See stock and margins</Link>
             </div>
           )}
@@ -117,7 +123,7 @@ export default function Purchase() {
                     {kept.length} items · {rupees(Math.round(sum))}{meta.invoiceTotal ? ` (bill says ${rupees(meta.invoiceTotal)})` : ""}
                   </p>
                 </div>
-                <Button onClick={save} busy={saving} disabled={!kept.length}>Add stock</Button>
+                <Button onClick={save} busy={saving} disabled={!kept.length}>{t("Add stock", "സ്റ്റോക്ക് ചേർക്കൂ")}</Button>
               </div>
               <div className="hidden sm:grid grid-cols-[2rem_1fr_5.5rem_6rem_4.5rem] gap-2 px-5 py-2 text-xs text-muted border-y border-line">
                 <span /><span>Item</span><span className="text-right">Qty</span><span className="text-right">Cost / unit</span><span className="text-right">Margin</span>
@@ -153,7 +159,7 @@ export default function Purchase() {
 
           {!lines && !reading && !done && (
             <div className="panel p-5 hidden lg:block text-muted">
-              <p className="font-semibold text-ink">Why this matters</p>
+              <p className="font-semibold text-ink">{t("Why this matters", "ഇത് എന്തിന്")}</p>
               <p className="mt-1">Most small shops don&apos;t know which items actually make money. Once a few supplier bills are in, Kanakku shows profit per item and per day, and warns you when a supplier raises a price.</p>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { istDate } from "@/lib/format";
 import { createBill, recordPayment } from "@/lib/kanakku";
 import { fail, ok } from "@/lib/http";
 import type { BillItem } from "@/lib/types";
@@ -15,7 +16,7 @@ interface Entry {
 export async function POST(req: Request) {
   try {
     const { entries } = (await req.json()) as { entries: Entry[] };
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istDate();
     let sales = 0, payments = 0, total = 0;
     for (const e of entries) {
       if (e.kind === "payment") {
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
         paymentMode: e.isCredit && e.customerName ? "credit" : "cash",
         source: "notebook",
         rawInput: e.lineText,
-        createdAt: e.date && e.date !== today ? new Date(`${e.date}T12:00:00`).toISOString() : undefined,
+        createdAt: e.date && e.date !== today ? new Date(`${e.date}T12:00:00+05:30`).toISOString() : undefined,
         affectStock: !e.date || e.date >= today,
       });
       sales++;

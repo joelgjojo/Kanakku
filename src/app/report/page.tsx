@@ -6,7 +6,7 @@ import { PrintButton } from "./PrintButton";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Business report · Kanakku" };
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
 
 // A 4-week summary from the shop's own records, written for a bank officer (MUDRA / small business loans).
 export default async function Report() {

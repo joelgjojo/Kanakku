@@ -3,13 +3,19 @@ import clsx from "clsx";
 import { Camera, Keyboard, LoaderCircle, MessageCircle, Mic, PenLine } from "lucide-react";
 import type { Source } from "@/lib/types";
 import { rupees } from "@/lib/format";
+import { useLang } from "@/lib/i18n";
 
-export function PageHeader({ title, ml, children }: { title: string; ml?: string; children?: React.ReactNode }) {
+/** title/titleMl: the page name in each language. ml: the Malayalam line under it. */
+export function PageHeader({ title, titleMl, ml, children }: { title: string; titleMl?: string; ml?: string; children?: React.ReactNode }) {
+  const { ml: inMl } = useLang();
+  const heading = inMl && titleMl ? titleMl : title;
+  // In Malayalam mode, a subtitle that only repeats the title shows the English name instead.
+  const sub = inMl && titleMl && (!ml || ml === titleMl) ? title : ml;
   return (
     <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-5 pb-4 lg:px-8 lg:pt-8">
       <div>
-        <h1 className="sign text-[2rem] lg:text-[2.5rem]">{title}</h1>
-        {ml && <p className="text-muted -mt-0.5">{ml}</p>}
+        <h1 className="sign text-[2rem] lg:text-[2.5rem]">{heading}</h1>
+        {sub && <p className="text-muted -mt-0.5">{sub}</p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>

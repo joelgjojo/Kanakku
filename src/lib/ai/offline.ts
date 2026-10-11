@@ -4,7 +4,7 @@
 //   "രണ്ട് കിലോ പഞ്ചസാര രാജന് പറ്റ്"
 //   "Rajan paid 500"
 import { findCustomer } from "../kanakku";
-import type { Customer, Intent, ParsedItem, ParsedMessage, PaymentMode, Product } from "../types";
+import type { Customer, Intent, Lang, ParsedItem, ParsedMessage, PaymentMode, Product } from "../types";
 
 const NUM_WORDS: Record<string, number> = {
   // English
@@ -13,20 +13,41 @@ const NUM_WORDS: Record<string, number> = {
   // Manglish
   ara: 0.5, oru: 1, onnu: 1, randu: 2, rand: 2, moonu: 3, munnu: 3, naalu: 4, nalu: 4, anju: 5, aaru: 6, ezhu: 7,
   ettu: 8, ombathu: 9, pathu: 10,
+  // Hindi (shop helpers)
+  aadha: 0.5, adha: 0.5, ek: 1, do: 2, teen: 3, char: 4, chaar: 4, paanch: 5, panch: 5, chhe: 6, saat: 7, aath: 8, nau: 9, das: 10, darjan: 12,
+  "आधा": 0.5, "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पांच": 5, "पाँच": 5, "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10, "दर्जन": 12,
   // Malayalam
   "അര": 0.5, "കാൽ": 0.25, "ഒരു": 1, "ഒന്ന്": 1, "രണ്ട്": 2, "രണ്ടു": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5, "ആറ്": 6,
   "ഏഴ്": 7, "എട്ട്": 8, "ഒമ്പത്": 9, "പത്ത്": 10, "ഡസൻ": 12,
 };
 
-const GRAM = /^(g|gm|gms|gram|grams|ഗ്രാം)$/;
+const GRAM = /^(g|gm|gms|gram|grams|ഗ്രാം|ग्राम)$/;
 const ML = /^(ml|മില്ലി)$/;
-const CREDIT = /(pattu|pattil|പറ്റ്|പറ്റിൽ|credit|kadam|കടം|എഴുതിക്കോ|ezhuthiko|ezhuthikko)/i;
-const UPI = /(upi|gpay|g pay|google pay|phonepe|paytm|ജിപേ)/i;
-const PAID = /(paid|thannu|തന്നു|adachu|അടച്ചു|payment|kodutthu|കൊടുത്തു)/i;
-const RESTOCK = /(vannu|വന്നു|arrived|stock in|stock vannu|delivery|ഇറക്കി|irakki)/i;
+// Roman words need word edges ("aya" sits inside "cherupayar"); Malayalam and Hindi script don't.
+const words = (roman: string, script = "") => new RegExp(`(?<![a-z])(${roman})(?![a-z])${script ? `|${script}` : ""}`, "i");
+const CREDIT = words("pattu|pattil|credit|kadam|ezhuthiko|ezhuthikko|udhaar|udhar|udhari|khata", "പറ്റ്|പറ്റിൽ|കടം|എഴുതിക്കോ|खाता|उधार");
+const UPI = words("upi|gpay|g pay|google pay|phonepe|paytm", "ജിപേ");
+const PAID = words("paid|thannu|adachu|payment|kodutthu|diya|diye|de diya|jama", "തന്നു|അടച്ചു|കൊടുത്തു|दिया|दिए|जमा");
+const RESTOCK = words("vannu|arrived|stock in|stock vannu|delivery|irakki|aaya|aya|aa gaya|aagaya", "വന്നു|ഇറക്കി|आया|आ गया");
+const STOCK_Q = words("stock|theernnu|low|running out|finished|maal", "സ്റ്റോക്ക്|തീർന്നു|തീരാറായി|स्टॉक");
+const CREDIT_Q = words("owes?|dues?|pending|baaki|bakki", "ബാക്കി|बाकी");
+const SUMMARY = words("today|innu|summary|kanakku|aaj|hisab|hisaab", "ഇന്ന്|കണക്ക്|आज|हिसाब");
+const QUESTION = /\?|(?<![a-z])(etra|ethra|which|what|how|why|best|profit|laabham|labham|kitna|kaun)(?![a-z])|ലാഭം|എത്ര|ഏത്|कितना|कौन/i;
 
 const tokenize = (s: string) =>
-  s.toLowerCase().normalize("NFC").replace(/[,.;!?।]/g, " , ").replace(/(\d)([a-zഀ-ൿ])/g, "$1 $2").split(/\s+/).filter(Boolean);
+  s.toLowerCase().normalize("NFC").replace(/[,.;!?।]/g, " , ").replace(/(\d)([a-zഀ-ൿऀ-ॿ])/g, "$1 $2").split(/\s+/).filter(Boolean);
+
+// Roman-letter Hindi that a Malayali shopkeeper wouldn't type.
+const HINDI_WORDS = /\b(udhaar|udhar|khata|diya|jama|aaya|aa gaya|chawal|cheeni|chini|doodh|anda|ande|sabun|namak|haldi|aata|pyaz|pyaaz|machis|kilo do|ek kilo|do kilo|teen|paanch|wala|wale|ko|hai)\b/i;
+
+function detectLang(text: string): Lang {
+  if (/[\u0900-\u097F]/.test(text)) return "hi";
+  if (/[\u0D00-\u0D7F]/.test(text)) return "ml";
+  if (/[\u0B80-\u0BFF]/.test(text)) return "ta";
+  if (/[\u0980-\u09FF]/.test(text)) return "bn";
+  if (HINDI_WORDS.test(text)) return "hi";
+  return "ml"; // Manglish and English replies look the same
+}
 
 function readNumber(tok: string | undefined): number | null {
   if (!tok) return null;
@@ -52,7 +73,7 @@ export function offlineParse(text: string, products: Product[], customers: Custo
       const ok = words.every((w, k) => {
         const t = tokens[i + k];
         // Malayalam sticks suffixes on words: "അരിയും", "പഞ്ചസാരയും". Prefix match covers that.
-        if (t === w) return true;
+        if (t === w || t === `${w}s` || t === `${w}es`) return true; // eggs, biscuits
         if (!/[\u0D00-\u0D7F]/.test(w)) return false;
         const stem = w.replace(/\u0D4D$/, ""); // drop the trailing virama: പരിപ്പ് → പരിപ്പ (+ും)
         return stem.length >= 2 && t.startsWith(stem) && t.length - stem.length <= 5;
@@ -100,9 +121,10 @@ export function offlineParse(text: string, products: Product[], customers: Custo
   let intent: Intent = items.length ? "sale" : "unknown";
   if (RESTOCK.test(lower) && items.length) intent = "restock";
   else if (!items.length && PAID.test(lower) && numbers.length) intent = "payment";
-  else if (!items.length && /(stock|സ്റ്റോക്ക്|theernnu|തീർന്നു)/i.test(lower)) intent = "stock_query";
-  else if (!items.length && CREDIT.test(lower)) intent = "credit_query";
-  else if (!items.length && /(today|innu|ഇന്ന്|summary|kanakku|കണക്ക്)/i.test(lower)) intent = "summary";
+  else if (!items.length && QUESTION.test(lower) && !STOCK_Q.test(lower) && !CREDIT_Q.test(lower)) intent = "question";
+  else if (!items.length && STOCK_Q.test(lower)) intent = "stock_query";
+  else if (!items.length && (CREDIT.test(lower) || CREDIT_Q.test(lower))) intent = "credit_query";
+  else if (!items.length && SUMMARY.test(lower)) intent = "summary";
 
   const paymentMode: PaymentMode = CREDIT.test(lower) ? "credit" : UPI.test(lower) ? "upi" : "cash";
 
@@ -115,5 +137,6 @@ export function offlineParse(text: string, products: Product[], customers: Custo
     amount: intent === "payment" ? Math.max(...numbers) : null,
     confidence: items.length ? 0.6 : 0.3,
     engine: "offline",
+    lang: detectLang(text),
   };
 }

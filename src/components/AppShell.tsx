@@ -2,26 +2,57 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BookOpen, CalendarDays, Camera, FileText, MessageCircle, Mic, Package, Receipt, ScanSearch } from "lucide-react";
+import { BookOpen, CalendarDays, Camera, FileText, Languages, MessageCircle, Mic, Package, Receipt, ScanSearch } from "lucide-react";
 import clsx from "clsx";
 import { OfflineSync } from "./OfflineSync";
+import { LangProvider, useLang } from "@/lib/i18n";
 
 const NAV = [
-  { href: "/", label: "Today", ml: "ഇന്ന്", icon: CalendarDays, mobile: true },
-  { href: "/bill", label: "New bill", ml: "ബിൽ", icon: Mic, mobile: true },
-  { href: "/pattu", label: "Pattu book", ml: "പറ്റ്", icon: BookOpen, mobile: true },
-  { href: "/stock", label: "Stock", ml: "സ്റ്റോക്ക്", icon: Package, mobile: true },
-  { href: "/notebook", label: "Notebook", ml: "നോട്ട്ബുക്ക്", icon: Camera, mobile: true },
-  { href: "/purchase", label: "Supplier bill", ml: "പർച്ചേസ്", icon: Receipt, mobile: false },
-  { href: "/shelf", label: "Shelf check", ml: "ഷെൽഫ്", icon: ScanSearch, mobile: false },
-  { href: "/whatsapp", label: "WhatsApp bot", ml: "വാട്സ്ആപ്പ്", icon: MessageCircle, mobile: false },
-  { href: "/report", label: "Loan report", ml: "റിപ്പോർട്ട്", icon: FileText, mobile: false },
+  { href: "/", label: "Today", ml: "ഇന്ന്", mlFull: "ഇന്ന്", icon: CalendarDays, mobile: true },
+  { href: "/bill", label: "New bill", ml: "ബിൽ", mlFull: "പുതിയ ബിൽ", icon: Mic, mobile: true },
+  { href: "/pattu", label: "Pattu book", ml: "പറ്റ്", mlFull: "പറ്റ് ബുക്ക്", icon: BookOpen, mobile: true },
+  { href: "/stock", label: "Stock", ml: "സ്റ്റോക്ക്", mlFull: "സ്റ്റോക്ക്", icon: Package, mobile: true },
+  { href: "/notebook", label: "Notebook", ml: "നോട്ട്ബുക്ക്", mlFull: "നോട്ട്ബുക്ക്", icon: Camera, mobile: true },
+  { href: "/purchase", label: "Supplier bill", ml: "പർച്ചേസ്", mlFull: "സപ്ലയർ ബിൽ", icon: Receipt, mobile: false },
+  { href: "/shelf", label: "Shelf check", ml: "ഷെൽഫ്", mlFull: "ഷെൽഫ് പരിശോധന", icon: ScanSearch, mobile: false },
+  { href: "/whatsapp", label: "WhatsApp bot", ml: "വാട്സ്ആപ്പ്", mlFull: "വാട്സ്ആപ്പ് ബോട്ട്", icon: MessageCircle, mobile: false },
+  { href: "/report", label: "Loan report", ml: "റിപ്പോർട്ട്", mlFull: "ലോൺ റിപ്പോർട്ട്", icon: FileText, mobile: false },
 ];
 
 interface Status { ai: "gemini" | "offline"; store: "local" | "supabase"; whatsapp: boolean; shopName: string }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <LangProvider>
+      <Shell>{children}</Shell>
+    </LangProvider>
+  );
+}
+
+/** The English / മലയാളം switch. */
+function LangSwitch({ compact }: { compact?: boolean }) {
+  const { lang, setLang } = useLang();
+  return (
+    <div role="radiogroup" aria-label="Language" className={clsx("inline-flex items-center rounded-lg border border-line bg-wall p-0.5 text-xs font-semibold", compact && "text-[0.7rem]")}>
+      {!compact && <Languages size={14} className="mx-1.5 text-muted" aria-hidden />}
+      {(["en", "ml"] as const).map((l) => (
+        <button
+          key={l}
+          role="radio"
+          aria-checked={lang === l}
+          onClick={() => setLang(l)}
+          className={clsx("rounded-md px-2 h-7", lang === l ? "bg-paper text-ink shadow-[0_1px_0_var(--color-line)]" : "text-muted hover:text-ink")}
+        >
+          {l === "en" ? "English" : "മലയാളം"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const { ml } = useLang();
   const [status, setStatus] = useState<Status | null>(null);
   useEffect(() => {
     if (path.startsWith("/k/")) return;
@@ -51,12 +82,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <n.icon size={18} strokeWidth={active(n.href) ? 2.4 : 1.8} />
-              <span className="flex-1">{n.label}</span>
-              <span className="text-xs text-faint">{n.ml}</span>
+              <span className="flex-1">{ml ? n.mlFull : n.label}</span>
+              {!ml && <span className="text-xs text-faint">{n.ml}</span>}
             </Link>
           ))}
         </nav>
         <div className="mt-auto px-2 text-xs text-muted space-y-1">
+          <div className="mb-3"><LangSwitch /></div>
           <StatusLine status={status} />
         </div>
       </aside>
@@ -68,6 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="text-xs text-muted truncate max-w-[9rem]">{status?.shopName}</span>
         </Link>
         <div className="flex items-center gap-1">
+          <LangSwitch compact />
           <Link href="/shelf" aria-label="Shelf check" className={clsx("p-2 rounded-lg", active("/shelf") && "bg-pen-soft text-pen")}><ScanSearch size={20} /></Link>
           <Link href="/whatsapp" aria-label="WhatsApp bot" className={clsx("p-2 rounded-lg", active("/whatsapp") && "bg-pen-soft text-pen")}><MessageCircle size={20} /></Link>
         </div>
@@ -93,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : (
               <n.icon size={21} strokeWidth={active(n.href) ? 2.4 : 1.8} />
             )}
-            <span>{n.ml}</span>
+            <span>{ml ? n.ml : n.label}</span>
           </Link>
         ))}
       </nav>
@@ -102,20 +135,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function StatusLine({ status }: { status: Status | null }) {
+  const { t } = useLang();
   if (!status) return null;
   return (
     <>
       <p className="flex items-center gap-2">
         <Dot ok={status.ai === "gemini"} />
-        {status.ai === "gemini" ? "Gemini AI connected" : "Offline parser (no AI key)"}
+        {status.ai === "gemini" ? t("Gemini AI connected", "Gemini AI കണക്റ്റഡ്") : t("Offline parser (no AI key)", "ഓഫ്‌ലൈൻ മോഡ് (AI കീ ഇല്ല)")}
       </p>
       <p className="flex items-center gap-2">
         <Dot ok />
-        {status.store === "supabase" ? "Saved to Supabase" : "Saved on this computer"}
+        {status.store === "supabase" ? t("Saved to Supabase", "Supabase-ൽ സേവ് ചെയ്യുന്നു") : t("Saved on this computer", "ഈ കമ്പ്യൂട്ടറിൽ സേവ് ചെയ്യുന്നു")}
       </p>
       <p className="flex items-center gap-2">
         <Dot ok />
-        {"WhatsApp: bot + simulator ready"}
+        {t("WhatsApp: bot + simulator ready", "വാട്സ്ആപ്പ് ബോട്ട് റെഡി")}
       </p>
     </>
   );

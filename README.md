@@ -25,6 +25,9 @@ Problem statement: **Small Business and Local Commerce, #1: Manual billing and s
 | **Ask Kanakku** | Ask anything about the shop by typing or voice, in Malayalam or English: "ഈ ആഴ്ച ലാഭം എത്ര?", "who should I stop giving pattu to?". Answers come from the shop's own numbers. | Today page, WhatsApp |
 | **Close the day** | Count the cash drawer; Kanakku says if it's short or extra, and by how much. | Today page |
 | **Loan-ready report** | A printable 4-week business summary (sales, consistency, growth, margin, collection rate) a bank officer can read for a MUDRA loan. Small shops usually have no records to show. | `/report` |
+| **Kanakku messages first** | No need to ask. At 8 am the owner gets "order these today, collect pattu from these people, yesterday vs last week" on WhatsApp; at 9 pm, the day's sales, profit and what the cash drawer should hold. | WhatsApp bridge (`DIGEST_MORNING`, `DIGEST_EVENING`), or send `morning` / `evening` |
+| **Hindi for shop helpers** | Many Kerala shops have helpers from other states. They can bill in Hindi ("Rajan ko 2 kilo cheeni udhaar", "Suma ne 300 diya") and get replies in Hindi. Bengali and Tamil are understood too. | WhatsApp, `/bill` |
+| **Full Malayalam app** | One switch (English / മലയാളം) turns every main screen into Malayalam for owners who don't read English. | sidebar / top bar |
 | **Works offline** | No internet: typed bills still parse (rule-based Malayalam/Manglish parser), and saved bills queue on the phone until the connection is back. | everywhere |
 
 The bot also understands:
@@ -33,6 +36,8 @@ The bot also understands:
 - `50 kilo ari vannu`: adds delivered stock
 - `stock`, `pattu`, `innathe kanakku`: answers with low stock, credit list, or today's summary
 - A photo with the caption `shelf`: runs a shelf check instead of reading a notebook
+- `morning` / `evening`: the daily plan and the day-close message
+- `namaste`: the menu in Hindi
 
 ---
 
@@ -108,6 +113,15 @@ npm run test:app -- https://your-app.vercel.app   # checks the deployed app
 
 It checks the AI, saving a bill, stock, pattu, every bot command, the dashboard and the WhatsApp webhook (including Twilio's signature). It adds one test bill, so **reset the demo** afterwards.
 
+### How accurate is it? (numbers for the slide)
+
+```bash
+npm run test:eval -- https://kanakku-kappa.vercel.app   # Gemini, through the live app
+npm run test:eval -- --offline                         # the no-internet parser only
+```
+
+36 real shop messages in Malayalam, Manglish, English and Hindi. A message counts as right only if the intent, every item and quantity, the customer and cash/UPI/pattu are all right. It prints the score per language, the time per message, and a ready line for the slide. The offline parser was tuned on these same sentences, so for an honest number also add 10 to 20 new sentences from a real shopkeeper to `CASES` in `scripts/eval.mts` and run it again.
+
 ### Go live: Vercel + real WhatsApp
 
 **1. Deploy (10 min)**
@@ -130,6 +144,8 @@ A small script on your laptop links a normal WhatsApp number to Kanakku, exactly
 5. When it says **✅ Connected**, send "hi" to the spare number from your own phone. Kanakku replies.
 
 The login is saved in `bridge/auth/`, so next time `npm run whatsapp` connects straight away. Keep the laptop awake and the terminal open during the demo. The bridge talks to the deployed app (`KANAKKU_URL`), so bills still show up live on the dashboard.
+
+The bridge also sends the owner the daily messages: the morning plan at `DIGEST_MORNING` (default 08:00) and the day close at `DIGEST_EVENING` (default 21:00), to `BRIDGE_OWNER` (default: the first number in `BRIDGE_ALLOW`). To show it on stage, type `m` or `e` and press Enter in the bridge terminal.
 
 **Official alternatives (need an account in good standing):**
 - **Meta Cloud API** at `/api/whatsapp/meta`: needs a Facebook account Meta trusts. A brand-new account gets its WhatsApp Business Account locked (error 131031).
@@ -221,7 +237,9 @@ src/
     kanakku.ts          Bills, payments, restock, balances
     analytics.ts        Dashboard numbers and forecasting
     bot.ts              WhatsApp brain (shared by simulator and webhook)
-    seed.ts             Demo shop: 20 products, 6 customers, 14 days of bills
+    digest.ts           The morning and evening messages Kanakku sends by itself
+    i18n.tsx            English / Malayalam switch for the app
+    seed.ts             Demo shop: 20 products, 6 customers, 28 days of bills
 supabase/schema.sql     Postgres tables + atomic stock function
 ```
 
@@ -243,6 +261,7 @@ supabase/schema.sql     Postgres tables + atomic stock function
 3. **WhatsApp (40 s).** Send a voice note to the sandbox number from another phone. The reply comes back with the bill. The laptop dashboard updates live, so the judges see the bill appear.
 4. **Notebook (40 s).** Photograph the real pattu book page. Lines appear for review. Add them. Point out "these were handwritten 2 minutes ago."
 5. **Insight (20 s).** Today page: "Sugar runs out in 1 day. One tap sends the order to the supplier." Pattu page: one tap sends a polite Malayalam reminder.
-6. **Close (20 s).** "Zero behaviour change. The shopkeeper keeps his notebook and WhatsApp. We do the accounts."
+6. **It messages you first (15 s).** In the bridge terminal type `m` + Enter. The owner's phone buzzes with the morning plan: what to order, whose pattu to collect. "Nobody had to open an app."
+7. **Close (20 s).** "Zero behaviour change. The shopkeeper keeps his notebook and WhatsApp. We do the accounts."
 
 **Backup:** record a screen video of the full flow the night before, in case the stage Wi-Fi fails. The offline parser still bills typed text with no internet.

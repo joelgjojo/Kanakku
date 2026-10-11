@@ -8,6 +8,10 @@
 //   KANAKKU_URL    = https://kanakku-kappa.vercel.app   (where Kanakku runs)
 //   BRIDGE_ALLOW   = 918943262406,91XXXXXXXXXX          (only these numbers get replies; recommended)
 //   BRIDGE_PHONE   = 91XXXXXXXXXX                        (optional: the bridge's own number, to link with a code instead of a QR)
+//   BRIDGE_OWNER   = 91XXXXXXXXXX                        (who gets the daily messages; default: first number in BRIDGE_ALLOW)
+//   DIGEST_MORNING = 08:00   DIGEST_EVENING = 21:00      (when Kanakku messages the owner by itself; "off" to stop)
+//
+// While it runs, type m + Enter to send the morning message now, or e + Enter for the evening one.
 //
 // Use a spare number. WhatsApp doesn't officially allow bots on normal accounts, so a number can get banned.
 
@@ -25,6 +29,7 @@ import makeWASocket, {
 } from "baileys";
 import P from "pino";
 import qrcode from "qrcode-terminal";
+import readline from "readline";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,6 +45,8 @@ for (const file of [path.join(here, ".env"), path.join(here, "..", ".env.local")
 const KANAKKU_URL = (process.env.KANAKKU_URL || "https://kanakku-kappa.vercel.app").replace(/\/$/, "");
 const ALLOW = (process.env.BRIDGE_ALLOW || "").split(",").map((s) => s.replace(/\D/g, "")).filter(Boolean);
 const PAIR_PHONE = (process.env.BRIDGE_PHONE || "").replace(/\D/g, "");
+const OWNER = (process.env.BRIDGE_OWNER || "").replace(/\D/g, "") || ALLOW[0] || "";
+const AT = { morning: process.env.DIGEST_MORNING || "08:00", evening: process.env.DIGEST_EVENING || "21:00" };
 const AUTH_DIR = path.join(here, "auth");
 const logger = P({ level: "silent" });
 
@@ -47,6 +54,7 @@ const say = (...a) => console.log(new Date().toLocaleTimeString("en-IN"), ...a);
 
 console.log(`\n🧾 Kanakku WhatsApp bridge`);
 console.log(`   Kanakku: ${KANAKKU_URL}`);
+console.log(OWNER ? `   Daily messages to ${OWNER}: morning ${AT.morning}, evening ${AT.evening}. Type m or e + Enter to send one now.` : `   Daily messages off (set BRIDGE_OWNER or BRIDGE_ALLOW).`);
 console.log(ALLOW.length ? `   Replies only to: ${ALLOW.join(", ")}, plus anyone who sends "join kanakku"` : `   ⚠️  Replies to EVERYONE who messages this number. Set BRIDGE_ALLOW to limit it.`);
 
 const digits = (jid) => (jid || "").split("@")[0].split(":")[0].replace(/\D/g, "");
@@ -59,6 +67,8 @@ const allowed = (...jids) =>
   !ALLOW.length ||
   jids.some((j) => j && (joined.has(j) || ALLOW.some((a) => digits(j).endsWith(a.slice(-10)))));
 const seen = new Set();
+let current = null; // the live connection, replaced on every reconnect
+let connected = false;
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -71,6 +81,7 @@ async function start() {
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });
+  current = sock;
   sock.ev.on("creds.update", saveCreds);
 
   let pairingAsked = false;
@@ -91,8 +102,12 @@ async function start() {
         qrcode.generate(qr, { small: true });
       }
     }
-    if (connection === "open") say(`✅ Connected as ${digits(sock.user?.id)}. Send a message to this number to test.`);
+    if (connection === "open") {
+      connected = true;
+      say(`✅ Connected as ${digits(sock.user?.id)}. Send a message to this number to test.`);
+    }
     if (connection === "close") {
+      connected = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code === DisconnectReason.loggedOut) {
         say("❌ Logged out from the phone. Delete the bridge/auth folder and run npm start again to relink.");
@@ -171,6 +186,45 @@ async function handle(sock, m) {
   await sock.sendPresenceUpdate("paused", jid).catch(() => {});
   await sock.sendMessage(jid, { text: reply }, { quoted: m });
   say(`📤 replied to ${from}: ${reply.split("\n")[0].slice(0, 70)}`);
+}
+
+// Kanakku messages the owner first: the morning plan and the evening close.
+async function sendDigest(kind) {
+  if (!OWNER) return say("No owner number. Set BRIDGE_OWNER in bridge/.env.");
+  if (!current || !connected) return say("Not connected to WhatsApp yet.");
+  const form = new FormData();
+  form.append("text", kind);
+  try {
+    const res = await fetch(`${KANAKKU_URL}/api/bot`, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
+    const data = await res.json();
+    if (!data.reply) throw new Error(data.error || `status ${res.status}`);
+    await current.sendMessage(`${OWNER}@s.whatsapp.net`, { text: data.reply });
+    say(`🔔 Sent the ${kind} message to ${OWNER}`);
+  } catch (e) {
+    say(`⚠️ Couldn't send the ${kind} message: ${e.message}`);
+  }
+}
+
+const sentOn = {}; // kind -> date already sent, so each goes once a day
+setInterval(() => {
+  const now = new Date();
+  const hhmm = now.toTimeString().slice(0, 5);
+  const today = now.toDateString();
+  for (const kind of ["morning", "evening"]) {
+    if (AT[kind] !== "off" && hhmm === AT[kind] && sentOn[kind] !== today) {
+      sentOn[kind] = today;
+      sendDigest(kind);
+    }
+  }
+}, 20_000);
+
+if (process.stdin.isTTY) {
+  readline.createInterface({ input: process.stdin }).on("line", (line) => {
+    const k = line.trim().toLowerCase();
+    if (k === "m" || k === "morning") sendDigest("morning");
+    else if (k === "e" || k === "evening") sendDigest("evening");
+    else if (k) console.log("Type m (morning message) or e (evening message), then Enter.");
+  });
 }
 
 start().catch((e) => {

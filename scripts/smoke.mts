@@ -100,6 +100,19 @@ for (const q of ["stock", "pattu", "innathe kanakku"]) {
   });
 }
 
+await check("Bot: Hindi helper (Suma ne 100 diya)", async () => {
+  const r = await bot("Suma ne 100 diya");
+  assert(r.kind === "payment" && /दिए/.test(r.reply), r.reply);
+  return r.reply.split("\n")[0];
+});
+for (const kind of ["morning", "evening"]) {
+  await check(`Daily ${kind} message`, async () => {
+    const r = await bot(kind);
+    assert(r.kind === "info" && r.reply.length > 80, r.reply);
+    return r.reply.split("\n")[0];
+  });
+}
+
 await check("Dashboard has today's bills", async () => {
   const d = await json("/api/dashboard");
   assert(d.today.bills > 0, "no bills today");

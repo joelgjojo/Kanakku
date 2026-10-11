@@ -5,11 +5,13 @@ import { Camera, Check, ImagePlus } from "lucide-react";
 import { api, compressImage } from "@/lib/client";
 import { unitLabel } from "@/lib/format";
 import type { Product, ShelfCount } from "@/lib/types";
+import { useLang } from "@/lib/i18n";
 import { Button, ErrorNote, PageHeader, Spinner } from "@/components/ui";
 
 type Row = ShelfCount & { product: Product | null; recorded: number | null; diff: number | null; accept?: boolean };
 
 export default function Shelf() {
+  const { t, ml } = useLang();
   const [preview, setPreview] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,17 +54,17 @@ export default function Shelf() {
 
   return (
     <>
-      <PageHeader title="Shelf check" ml="ഷെൽഫ് നോക്കി സ്റ്റോക്ക് ഉറപ്പിക്കാം" />
+      <PageHeader title="Shelf check" titleMl="ഷെൽഫ് പരിശോധന" ml="ഷെൽഫ് നോക്കി സ്റ്റോക്ക് ഉറപ്പിക്കാം" />
       <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
-          <p className="text-muted">Photograph a shelf. Kanakku counts what it can see and compares it with what your bills say should be there, so missing or unbilled stock shows up.</p>
+          <p className="text-muted">{t("Photograph a shelf. Kanakku counts what it can see and compares it with what your bills say should be there, so missing or unbilled stock shows up.", "ഷെൽഫിന്റെ ഫോട്ടോ എടുക്കൂ. കാണുന്നത് എണ്ണി, ബില്ലുകൾ പ്രകാരം ഉണ്ടാകേണ്ടതുമായി ഒത്തുനോക്കും. കാണാതായതും ബില്ലാകാത്തതും അറിയാം.")}</p>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg bg-ink text-paper font-semibold cursor-pointer hover:bg-pen-dark">
-              <Camera size={26} />Take photo
+              <Camera size={26} />{t("Take photo", "ഫോട്ടോ എടുക്കൂ")}
               <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
             <label className="flex flex-col items-center justify-center gap-2 h-28 rounded-lg border border-line font-semibold cursor-pointer hover:bg-wall">
-              <ImagePlus size={26} />Choose from gallery
+              <ImagePlus size={26} />{t("Choose from gallery", "ഗാലറിയിൽ നിന്ന്")}
               <input type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
             </label>
           </div>
@@ -70,28 +72,28 @@ export default function Shelf() {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="Shelf to count" className="w-full rounded-lg border border-line" />
-              {!rows && <Button onClick={check} busy={busy} className="w-full h-12 text-base">{busy ? "Counting…" : "Count this shelf"}</Button>}
+              {!rows && <Button onClick={check} busy={busy} className="w-full h-12 text-base">{busy ? t("Counting…", "എണ്ണുന്നു…") : t("Count this shelf", "ഈ ഷെൽഫ് എണ്ണൂ")}</Button>}
             </>
           )}
           <ErrorNote>{err}</ErrorNote>
           {changed !== null && (
-            <p className="rounded-lg bg-leaf-soft p-3 text-leaf font-semibold flex items-center gap-2 slip-in"><Check size={18} />Updated stock for {changed} items.</p>
+            <p className="rounded-lg bg-leaf-soft p-3 text-leaf font-semibold flex items-center gap-2 slip-in"><Check size={18} />{ml ? `${changed} സാധനങ്ങളുടെ സ്റ്റോക്ക് ശരിയാക്കി.` : `Updated stock for ${changed} items.`}</p>
           )}
         </section>
 
         <section className="min-w-0">
-          {busy && !rows && <div className="panel p-6 flex items-center gap-3"><Spinner />Counting packets and estimating sacks…</div>}
+          {busy && !rows && <div className="panel p-6 flex items-center gap-3"><Spinner />{t("Counting packets and estimating sacks…", "പാക്കറ്റുകൾ എണ്ണുന്നു, ചാക്കുകൾ കണക്കാക്കുന്നു…")}</div>}
           {rows && (
             <div className="panel overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
                 <div>
-                  <h2 className="text-lg font-semibold">{mismatches ? `${mismatches} items don't match your records` : "Shelf matches your records"}</h2>
+                  <h2 className="text-lg font-semibold">{mismatches ? (ml ? `${mismatches} സാധനങ്ങൾ കണക്കുമായി ഒത്തുപോകുന്നില്ല` : `${mismatches} items don't match your records`) : t("Shelf matches your records", "ഷെൽഫും കണക്കും ഒത്തു")}</h2>
                   <p className="text-sm text-muted">{notes}</p>
                 </div>
-                <Button onClick={apply} busy={busy} disabled={!rows.some((r) => r.accept)}>Use shelf count</Button>
+                <Button onClick={apply} busy={busy} disabled={!rows.some((r) => r.accept)}>{t("Use shelf count", "ഷെൽഫിലെ എണ്ണം എടുക്കൂ")}</Button>
               </div>
               <div className="grid grid-cols-[2.5rem_1fr_4.5rem_4.5rem_4.5rem] gap-2 px-5 py-2 text-xs text-muted border-y border-line">
-                <span /><span>Item</span><span className="text-right">On shelf</span><span className="text-right">Records</span><span className="text-right">Gap</span>
+                <span /><span>{t("Item", "സാധനം")}</span><span className="text-right">{t("On shelf", "ഷെൽഫിൽ")}</span><span className="text-right">{t("Records", "കണക്കിൽ")}</span><span className="text-right">{t("Gap", "വ്യത്യാസം")}</span>
               </div>
               <ul className="divide-y divide-line">
                 {rows.map((r, i) => {

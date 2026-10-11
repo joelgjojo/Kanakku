@@ -9,8 +9,9 @@ import type { Balance } from "@/lib/kanakku";
 import { useRecorder } from "@/components/useRecorder";
 import { enqueueBill } from "@/components/OfflineSync";
 import { Button, ErrorNote, PageHeader, Segmented, inputCls } from "@/components/ui";
+import { trustLabel, trustReason, useLang } from "@/lib/i18n";
 
-const EXAMPLES = ["രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്", "2 kg ari, 1 soap, 6 mutta", "അര കിലോ പരിപ്പും ഒരു സോപ്പും gpay"];
+const EXAMPLES = ["രാജന് 2 കിലോ പഞ്ചസാര പറ്റ്", "2 kg ari, 1 soap, 6 mutta", "അര കിലോ പരിപ്പും ഒരു സോപ്പും gpay", "Rajan ko 2 kilo cheeni udhaar"];
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -38,6 +39,7 @@ export default function NewBill() {
   const [saved, setSaved] = useState<{ bill: Bill | null; due: number | null; offline?: boolean } | null>(null);
   const [q, setQ] = useState("");
   const billRef = useRef<HTMLElement>(null);
+  const { t, ml } = useLang();
 
   useEffect(() => {
     api<{ products: Product[] }>("/api/products").then((r) => setProducts(r.products)).catch(() => {});
@@ -48,8 +50,8 @@ export default function NewBill() {
     setHeard({ transcript: r.parsed.transcript, engine: r.parsed.engine, via });
     if (r.parsed.intent !== "sale" || !r.items.length) {
       setError(r.parsed.intent === "payment" || r.parsed.intent === "restock"
-        ? "That sounds like a payment or stock delivery. Use the Pattu book or Stock page, or send it to the WhatsApp bot."
-        : "Couldn't find any items in that. Try again, naming the item and quantity.");
+        ? t("That sounds like a payment or stock delivery. Use the Pattu book or Stock page, or send it to the WhatsApp bot.", "ഇത് പറ്റ് അടച്ചതോ സ്റ്റോക്ക് വന്നതോ ആണെന്ന് തോന്നുന്നു. പറ്റ് പുസ്തകമോ സ്റ്റോക്ക് പേജോ ഉപയോഗിക്കൂ, അല്ലെങ്കിൽ വാട്സ്ആപ്പ് ബോട്ടിന് അയക്കൂ.")
+        : t("Couldn't find any items in that. Try again, naming the item and quantity.", "സാധനങ്ങൾ മനസ്സിലായില്ല. സാധനത്തിന്റെ പേരും അളവും പറഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ."));
       return;
     }
     setItems((cur) => mergeItems(cur, r.items));
@@ -57,7 +59,7 @@ export default function NewBill() {
     if (window.innerWidth < 1024) setTimeout(() => billRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     if (r.parsed.customerName) setCustomer(r.parsed.customerName);
     if (r.parsed.paymentMode !== "cash") setMode(r.parsed.paymentMode);
-  }, []);
+  }, [t]);
 
   const parse = useCallback(async (form: FormData) => {
     setParsing(true);
@@ -100,7 +102,7 @@ export default function NewBill() {
 
   const save = async () => {
     setError(null);
-    if (mode === "credit" && !customer.trim()) return setError("Pattu needs a customer name.");
+    if (mode === "credit" && !customer.trim()) return setError(t("Pattu needs a customer name.", "പറ്റിന് ആളുടെ പേര് വേണം."));
     const body = {
       items: items.filter((i) => i.qty > 0),
       customerName: customer.trim() || null,
@@ -141,7 +143,7 @@ export default function NewBill() {
 
   return (
     <>
-      <PageHeader title="New bill" ml="പറഞ്ഞാൽ മതി, ബിൽ റെഡി" />
+      <PageHeader title="New bill" titleMl="പുതിയ ബിൽ" ml="പറഞ്ഞാൽ മതി, ബിൽ റെഡി" />
       <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
         {/* Capture */}
         <section className="space-y-4 lg:col-start-1 lg:row-start-1">
@@ -149,7 +151,7 @@ export default function NewBill() {
             <button
               onClick={rec.toggle}
               disabled={rec.state === "processing" || parsing}
-              aria-label={rec.state === "recording" ? "Stop recording" : "Start speaking"}
+              aria-label={rec.state === "recording" ? t("Stop recording", "നിർത്തുക") : t("Start speaking", "പറഞ്ഞു തുടങ്ങൂ")}
               className={clsx(
                 "grid place-items-center size-32 rounded-full transition-colors disabled:opacity-60",
                 rec.state === "recording" ? "bg-margin text-white recording" : "bg-sign text-ink hover:bg-[#f7cf4f]",
@@ -158,14 +160,16 @@ export default function NewBill() {
               {rec.state === "recording" ? <Square size={38} fill="currentColor" /> : <Mic size={46} strokeWidth={2.2} />}
             </button>
             <p className="mt-4 text-lg font-semibold">
-              {rec.state === "recording" ? `Listening… ${rec.seconds}s. Tap to finish.` : parsing || rec.state === "processing" ? "Writing the bill…" : "Tap and say the bill"}
+              {rec.state === "recording"
+                ? t(`Listening… ${rec.seconds}s. Tap to finish.`, `കേൾക്കുന്നു… ${rec.seconds}s. നിർത്താൻ തൊടൂ.`)
+                : parsing || rec.state === "processing" ? t("Writing the bill…", "ബിൽ എഴുതുന്നു…") : t("Tap and say the bill", "തൊട്ടിട്ട് ബിൽ പറയൂ")}
             </p>
-            <p className="text-muted text-sm">Malayalam, Manglish or English</p>
+            <p className="text-muted text-sm">{t("Malayalam, Manglish, English or Hindi", "മലയാളം, മംഗ്ലീഷ്, ഇംഗ്ലീഷ്, ഹിന്ദി")}</p>
             {rec.error && <div className="mt-3 w-full"><ErrorNote>{rec.error}</ErrorNote></div>}
 
             <form className="mt-5 flex w-full gap-2" onSubmit={(e) => { e.preventDefault(); sendText(); }}>
-              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type: 2 kg ari, 1 soap" className={inputCls} aria-label="Type the bill" />
-              <Button type="submit" variant="outline" disabled={!text.trim() || parsing}>Add</Button>
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Or type: 2 kg ari, 1 soap", "അല്ലെങ്കിൽ ടൈപ്പ് ചെയ്യൂ: 2 കിലോ അരി, 1 സോപ്പ്")} className={inputCls} aria-label={t("Type the bill", "ബിൽ ടൈപ്പ് ചെയ്യൂ")} />
+              <Button type="submit" variant="outline" disabled={!text.trim() || parsing}>{t("Add", "ചേർക്കൂ")}</Button>
             </form>
             <div className="mt-3 flex flex-wrap justify-center gap-1.5">
               {EXAMPLES.map((ex) => (
@@ -183,14 +187,16 @@ export default function NewBill() {
           {saved && (
             <div className="panel slip-in p-4 border-leaf/40 bg-leaf-soft">
               <p className="font-semibold text-leaf flex items-center gap-2"><Check size={18} />
-                {saved.offline ? "Saved on this phone. It will sync when the internet is back." : `Bill #${saved.bill!.number} saved: ${rupees(saved.bill!.total)}`}
+                {saved.offline
+                  ? t("Saved on this phone. It will sync when the internet is back.", "ഈ ഫോണിൽ സേവ് ചെയ്തു. നെറ്റ് വന്നാൽ തനിയെ സിങ്ക് ആകും.")
+                  : t(`Bill #${saved.bill!.number} saved: ${rupees(saved.bill!.total)}`, `ബിൽ #${saved.bill!.number} സേവ് ചെയ്തു: ${rupees(saved.bill!.total)}`)}
               </p>
               {saved.bill?.paymentMode === "credit" && saved.due !== null && (
-                <p className="text-sm mt-1">{saved.bill.customerName}&apos;s pattu is now <b className="text-due num">{rupees(saved.due)}</b></p>
+                <p className="text-sm mt-1">{ml ? `${saved.bill.customerName}-ന്റെ പറ്റ് ഇപ്പോൾ ` : `${saved.bill.customerName}'s pattu is now `}<b className="text-due num">{rupees(saved.due)}</b></p>
               )}
               {saved.bill && (
                 <a href={waLink(receiptPhone, receipt)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 h-9 rounded-lg bg-paper border border-line px-3 text-sm font-semibold hover:bg-wall">
-                  <Send size={15} /> Send receipt on WhatsApp
+                  <Send size={15} /> {t("Send receipt on WhatsApp", "വാട്സ്ആപ്പിൽ രസീത് അയക്കൂ")}
                 </a>
               )}
             </div>
@@ -198,26 +204,26 @@ export default function NewBill() {
 
           <div className="panel overflow-hidden">
             <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Bill</h2>
+              <h2 className="text-lg font-semibold">{t("Bill", "ബിൽ")}</h2>
               {heard && (
                 <p className="text-sm text-muted truncate" title={heard.transcript}>
-                  Heard: <span className="text-ink">“{heard.transcript}”</span>
+                  {t("Heard:", "കേട്ടത്:")} <span className="text-ink">“{heard.transcript}”</span>
                 </p>
               )}
             </div>
             <div className="ledger">
               {items.length === 0 && (
-                <p className="ledger-row pl-14 pr-4 text-faint">Speak, type or tap items. They appear here.</p>
+                <p className="ledger-row pl-14 pr-4 text-faint">{t("Speak, type or tap items. They appear here.", "പറയൂ, ടൈപ്പ് ചെയ്യൂ, അല്ലെങ്കിൽ സാധനം തൊടൂ. ഇവിടെ വരും.")}</p>
               )}
               {items.map((it, i) => (
                 <div key={i} className="ledger-row gap-2 pr-3 slip-in">
                   <span className="w-11 shrink-0 text-center text-sm text-faint num">{i + 1}</span>
                   <span className="flex-1 min-w-0 leading-tight">
                     <span className="block truncate font-semibold text-pen-dark">{it.nameMl ?? it.name}</span>
-                    {it.nameMl && <span className="block truncate text-xs text-muted">{it.name}{!it.productId && " · not in stock list"}</span>}
+                    {it.nameMl && <span className="block truncate text-xs text-muted">{it.name}{!it.productId && t(" · not in stock list", " · സ്റ്റോക്ക് ലിസ്റ്റിൽ ഇല്ല")}</span>}
                   </span>
                   <label className="flex items-center gap-1 text-sm">
-                    <span className="sr-only">Quantity</span>
+                    <span className="sr-only">{t("Quantity", "അളവ്")}</span>
                     <input type="number" inputMode="decimal" step="any" min={0} value={it.qty}
                       onChange={(e) => update(i, { qty: Number(e.target.value) })}
                       className="num w-14 h-8 rounded-md border border-line bg-paper/80 px-1.5 text-right" />
@@ -230,7 +236,7 @@ export default function NewBill() {
                       className="num w-16 h-8 ml-1 rounded-md border border-line bg-paper/80 px-1.5 text-right text-ink" />
                   </label>
                   <span className="num w-20 text-right font-semibold text-pen-dark">{rupees(it.qty * it.price)}</span>
-                  <button onClick={() => setItems((c) => c.filter((_, j) => j !== i))} aria-label={`Remove ${it.name}`} className="p-1.5 rounded-md text-faint hover:text-due hover:bg-due-soft">
+                  <button onClick={() => setItems((c) => c.filter((_, j) => j !== i))} aria-label={t(`Remove ${it.name}`, `${it.nameMl ?? it.name} മാറ്റുക`)} className="p-1.5 rounded-md text-faint hover:text-due hover:bg-due-soft">
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -245,33 +251,36 @@ export default function NewBill() {
             <div className="p-5 space-y-4 border-t border-line">
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-sm text-muted">Customer {mode === "credit" ? "(needed for pattu)" : "(optional)"}</span>
-                  <input list="customers" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Name" className={clsx(inputCls, "mt-1")} />
+                  <span className="text-sm text-muted">{t("Customer", "ആൾ")} {mode === "credit" ? t("(needed for pattu)", "(പറ്റിന് വേണം)") : t("(optional)", "(വേണമെങ്കിൽ)")}</span>
+                  <input list="customers" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder={t("Name", "പേര്")} className={clsx(inputCls, "mt-1")} />
                   <datalist id="customers">{customers.map((c) => <option key={c.customer.id} value={c.customer.name}>{c.customer.nameMl}</option>)}</datalist>
                   {customerMatch && (customerMatch.due > 0 || mode === "credit") && (
                     <span className="block text-xs text-muted mt-1">
-                      Pattu already <b className="text-due num">{rupees(Math.max(0, customerMatch.due))}</b>
-                      {" "}· {customerMatch.trust.label} · limit <span className="num">{rupees(customerMatch.trust.limit)}</span>
+                      {t("Pattu already", "ഇപ്പോഴുള്ള പറ്റ്")} <b className="text-due num">{rupees(Math.max(0, customerMatch.due))}</b>
+                      {" "}· {trustLabel(customerMatch.trust.label, ml)} · {t("limit", "പരിധി")} <span className="num">{rupees(customerMatch.trust.limit)}</span>
                     </span>
                   )}
                   {customerMatch && mode === "credit" && customerMatch.due + total > customerMatch.trust.limit && (
                     <span className="block mt-1 rounded-md bg-due-soft px-2 py-1 text-xs text-due">
-                      This takes {customerMatch.customer.name} to {rupees(customerMatch.due + total)}, over the limit. {customerMatch.trust.reason}
+                      {ml
+                        ? `ഇതോടെ ${customerMatch.customer.nameMl ?? customerMatch.customer.name}-ന്റെ പറ്റ് ${rupees(customerMatch.due + total)} ആകും, പരിധി കഴിയും. `
+                        : `This takes ${customerMatch.customer.name} to ${rupees(customerMatch.due + total)}, over the limit. `}
+                      {trustReason(customerMatch, ml)}
                     </span>
                   )}
                 </label>
                 <div>
-                  <span className="text-sm text-muted block mb-1">Paid by</span>
-                  <Segmented label="Paid by" value={mode} onChange={setMode}
-                    options={[{ value: "cash", label: "Cash" }, { value: "upi", label: "UPI" }, { value: "credit", label: "Pattu", tone: "due" }]} />
+                  <span className="text-sm text-muted block mb-1">{t("Paid by", "പണം")}</span>
+                  <Segmented label={t("Paid by", "പണം")} value={mode} onChange={setMode}
+                    options={[{ value: "cash", label: t("Cash", "ക്യാഷ്") }, { value: "upi", label: "UPI" }, { value: "credit", label: t("Pattu", "പറ്റ്"), tone: "due" }]} />
                 </div>
               </div>
               <ErrorNote>{error}</ErrorNote>
               <div className="flex gap-2">
                 <Button onClick={save} busy={saving} disabled={!items.length} className="flex-1 h-12 text-base">
-                  <Plus size={18} /> Save bill {items.length > 0 && <span className="num">· {rupees(total)}</span>}
+                  <Plus size={18} /> {t("Save bill", "ബിൽ സേവ് ചെയ്യൂ")} {items.length > 0 && <span className="num">· {rupees(total)}</span>}
                 </Button>
-                {items.length > 0 && <Button variant="outline" className="h-12" onClick={reset}>Clear</Button>}
+                {items.length > 0 && <Button variant="outline" className="h-12" onClick={reset}>{t("Clear", "മായ്ക്കൂ")}</Button>}
               </div>
             </div>
           </div>
@@ -281,7 +290,7 @@ export default function NewBill() {
           <div className="panel p-4">
             <div className="relative mb-3">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find an item to tap in" className={clsx(inputCls, "pl-9")} aria-label="Search items" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Find an item to tap in", "സാധനം തിരയൂ")} className={clsx(inputCls, "pl-9")} aria-label={t("Search items", "സാധനം തിരയൂ")} />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80 overflow-y-auto pr-1">
               {shown.map((p) => (
