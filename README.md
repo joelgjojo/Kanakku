@@ -79,11 +79,41 @@ The service_role key can read and write everything. Keep it only in `.env.local`
 
 Go to **Stock → Reset to the starting demo** so the numbers are clean.
 
-### Deploy
+### Test everything
 
-1. Push to GitHub, import the repo on [vercel.com](https://vercel.com), and add the env vars.
-2. Use Supabase on Vercel: the local JSON file resets whenever Vercel restarts the server.
-3. Set `PUBLIC_URL` to your Vercel URL and point the Twilio sandbox webhook to `https://<your-app>/api/whatsapp`.
+With the app running (`npm run dev`), in a second terminal:
+
+```bash
+npm run test:app                                  # checks your laptop
+npm run test:app -- https://your-app.vercel.app   # checks the deployed app
+```
+
+It checks the AI, saving a bill, stock, pattu, every bot command, the dashboard and the WhatsApp webhook (including Twilio's signature). It adds one test bill, so **reset the demo** afterwards.
+
+### Go live: Vercel + real WhatsApp
+
+**1. Deploy (10 min)**
+1. [vercel.com](https://vercel.com) → sign in with GitHub → **Add New → Project** → import `Kanakku` → **Deploy**.
+2. **Settings → Environment Variables**: add everything from `.env.local` (`GEMINI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SHOP_NAME`). Leave the Twilio ones for step 2.
+3. **Deployments → ⋯ → Redeploy** so the keys take effect. Open the link: the sidebar should show green dots for Gemini and Supabase.
+4. `vercel.json` runs the app in Mumbai (`bom1`), next to the Supabase database, so pages load fast.
+
+**2. Twilio WhatsApp sandbox (10 min)**
+1. Sign up at [twilio.com](https://www.twilio.com/try-twilio) (free trial).
+2. **Messaging → Try it out → Send a WhatsApp message**. From your phone, send the `join <two-words>` code to the sandbox number shown. Every phone that will use the bot (yours, teammates', the demo phone) must do this once.
+3. Copy **Account SID** and **Auth Token** from the Console home page.
+4. In Vercel, add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `PUBLIC_URL=https://your-app.vercel.app` (exact, no slash at the end). Redeploy.
+5. Back in Twilio, open **Sandbox settings** and set **When a message comes in** to `https://your-app.vercel.app/api/whatsapp`, method **POST**. Save.
+6. Send "hi" to the sandbox number on WhatsApp. Kanakku should reply with its menu.
+
+Slow messages (big notebook photos) get an instant "⏳ Reading it now" reply, and the result follows as a second message, so Twilio's 15-second limit never cuts you off.
+
+**Testing WhatsApp from your laptop instead:** run `npx ngrok http 3000` (free ngrok account needed), put the `https://….ngrok-free.app` address in `PUBLIC_URL` in `.env.local`, restart `npm run dev`, and use `<ngrok address>/api/whatsapp` as the Twilio webhook.
+
+**If WhatsApp doesn't reply**
+- Twilio Console → **Monitor → Logs → Errors**. Error 11200 means Twilio couldn't reach the app, so check the URL.
+- A 403 in Vercel's logs (**Deployments → Logs**) means `PUBLIC_URL` doesn't match the webhook address exactly.
+- The sandbox forgets a phone after 72 hours of no messages. Send the `join` code again.
 
 ---
 
