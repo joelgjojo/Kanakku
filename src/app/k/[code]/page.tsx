@@ -62,7 +62,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ code:
               )}
             </div>
           )}
-          {!upi && due > 0 && <p className="mt-4 text-sm text-muted">Please pay at the shop when convenient.</p>}
+          {!upi && due > 0 && <p className="mt-4 text-[0.95rem] text-muted">Please pay at the shop when convenient. Nanni 🙏</p>}
         </section>
 
         <section className="panel overflow-hidden">

@@ -265,10 +265,8 @@ function PayQr({ upi, due }: { upi: string | null; due: number }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); setSvg(null); }, [upi]);
-  if (due <= 0) return null;
-  if (!upi) {
-    return <span className="inline-flex items-center gap-2 h-9 px-1 text-xs text-muted"><QrCode size={15} />Add NEXT_PUBLIC_UPI_ID to show a pay QR</span>;
-  }
+  // No UPI ID set for the shop: customers pay at the counter, so there's nothing to show.
+  if (due <= 0 || !upi) return null;
   return (
     <>
       <button
