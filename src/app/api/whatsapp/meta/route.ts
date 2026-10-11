@@ -49,7 +49,19 @@ export async function POST(req: Request) {
     }
   }
 
-  let payload: { entry?: { changes?: { value?: { metadata?: { phone_number_id?: string }; messages?: MetaMessage[] } }[] }[] };
+  let payload: {
+    entry?: {
+      changes?: {
+        field?: string;
+        value?: {
+          metadata?: { phone_number_id?: string };
+          messages?: MetaMessage[];
+          statuses?: { id: string; status: string; recipient_id: string; errors?: { code: number; title?: string; message?: string; error_data?: { details?: string } }[] }[];
+          errors?: { code: number; title?: string; message?: string; error_data?: { details?: string } }[];
+        };
+      }[];
+    }[];
+  };
   try {
     payload = JSON.parse(raw);
   } catch {
@@ -60,6 +72,16 @@ export async function POST(req: Request) {
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const phoneId = change.value?.metadata?.phone_number_id ?? process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
+      // Delivery reports for our replies: sent → delivered → read, or failed with a reason.
+      for (const st of change.value?.statuses ?? []) {
+        const err = st.errors?.[0];
+        const line = `[kanakku] WhatsApp (Meta) status: ${st.status} to ${st.recipient_id}${err ? ` — error ${err.code} ${err.title ?? ""}: ${err.message ?? ""} ${err.error_data?.details ?? ""}` : ""}`;
+        if (st.status === "failed") console.error(line);
+        else console.log(line);
+      }
+      for (const err of change.value?.errors ?? []) {
+        console.error(`[kanakku] WhatsApp (Meta) error ${err.code} ${err.title ?? ""}: ${err.message ?? ""} ${err.error_data?.details ?? ""}`);
+      }
       for (const msg of change.value?.messages ?? []) {
         if (seen.has(msg.id)) continue;
         seen.add(msg.id);
