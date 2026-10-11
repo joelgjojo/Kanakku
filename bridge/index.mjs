@@ -121,6 +121,9 @@ async function handle(sock, m) {
   const audio = msg.audioMessage;
   const doc = msg.documentMessage;
   const text = msg.conversation || msg.extendedTextMessage?.text || image?.caption || doc?.caption || "";
+  // Only answer recent messages, never a backlog that arrives after reconnecting.
+  const sentAt = Number(m.messageTimestamp || 0) * 1000;
+  if (sentAt && Date.now() - sentAt > 5 * 60_000) return;
   const from = digits(m.key.remoteJidAlt || jid);
 
   if (!text && !image && !audio && !doc) return;
@@ -147,6 +150,9 @@ async function handle(sock, m) {
     reply = `⚠️ Can't reach Kanakku right now (${e.name === "TimeoutError" ? "timed out" : e.message}).`;
   }
 
+  // Reply at a human pace: a short "typing…" pause scaled to the reply length.
+  await sock.sendPresenceUpdate("composing", jid).catch(() => {});
+  await new Promise((r) => setTimeout(r, 900 + Math.min(1600, reply.length * 6) + Math.random() * 600));
   await sock.sendPresenceUpdate("paused", jid).catch(() => {});
   await sock.sendMessage(jid, { text: reply }, { quoted: m });
   say(`📤 replied to ${from}: ${reply.split("\n")[0].slice(0, 70)}`);
