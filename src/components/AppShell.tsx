@@ -40,10 +40,11 @@ function LangSwitch({ compact }: { compact?: boolean }) {
           key={l}
           role="radio"
           aria-checked={lang === l}
+          aria-label={l === "en" ? "English" : "മലയാളം"}
           onClick={() => setLang(l)}
           className={clsx("rounded-md px-2 h-7", lang === l ? "bg-paper text-ink shadow-[0_1px_0_var(--color-line)]" : "text-muted hover:text-ink")}
         >
-          {l === "en" ? "English" : "മലയാളം"}
+          {compact ? (l === "en" ? "EN" : "മല") : l === "en" ? "English" : "മലയാളം"}
         </button>
       ))}
     </div>
@@ -94,10 +95,10 @@ function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="print:hidden lg:hidden sticky top-0 z-30 flex items-center justify-between border-b border-line bg-paper/95 backdrop-blur px-4 h-14">
+      <header className="print:hidden lg:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-paper/95 backdrop-blur px-4 h-14">
         <Link href="/" className="flex items-baseline gap-2">
           <span className="sign text-2xl">കണക്ക്</span>
-          <span className="text-xs text-muted truncate max-w-[9rem]">{status?.shopName}</span>
+          <span className="hidden min-[400px]:inline text-xs text-muted truncate max-w-[7rem]">{status?.shopName}</span>
         </Link>
         <div className="flex items-center gap-1">
           <LangSwitch compact />

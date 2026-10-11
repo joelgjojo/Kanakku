@@ -55,7 +55,7 @@ export default function Shelf() {
   return (
     <>
       <PageHeader title="Shelf check" titleMl="ഷെൽഫ് പരിശോധന" ml="ഷെൽഫ് നോക്കി സ്റ്റോക്ക് ഉറപ്പിക്കാം" />
-      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
+      <div className="px-4 lg:px-8 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
           <p className="text-muted">{t("Photograph a shelf. Kanakku counts what it can see and compares it with what your bills say should be there, so missing or unbilled stock shows up.", "ഷെൽഫിന്റെ ഫോട്ടോ എടുക്കൂ. കാണുന്നത് എണ്ണി, ബില്ലുകൾ പ്രകാരം ഉണ്ടാകേണ്ടതുമായി ഒത്തുനോക്കും. കാണാതായതും ബില്ലാകാത്തതും അറിയാം.")}</p>
           <div className="grid grid-cols-2 gap-2">

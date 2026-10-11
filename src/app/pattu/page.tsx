@@ -66,7 +66,7 @@ function Pattu() {
       <PageHeader title="Pattu book" titleMl="പറ്റ് പുസ്തകം" ml="പറ്റ് പുസ്തകം">
         {list && <p className="text-right"><span className="text-sm text-muted block">{t("Total pending", "ആകെ കിട്ടാനുള്ളത്")}</span><span className="sign num text-3xl text-due">{rupees(total)}</span></p>}
       </PageHeader>
-      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] lg:items-start">
+      <div className="px-4 lg:px-8 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] lg:items-start">
         <section className={clsx("panel overflow-hidden", selected && "hidden lg:block")}>
           {!list ? <div className="p-5"><Spinner /></div> : (
             <>

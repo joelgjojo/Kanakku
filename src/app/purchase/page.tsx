@@ -62,7 +62,7 @@ export default function Purchase() {
   return (
     <>
       <PageHeader title="Supplier bill" titleMl="സപ്ലയർ ബിൽ" ml="ബിൽ ഫോട്ടോ എടുത്താൽ സ്റ്റോക്കും ലാഭവും റെഡി" />
-      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
+      <div className="px-4 lg:px-8 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
           <p className="text-muted">
             {ml ? (

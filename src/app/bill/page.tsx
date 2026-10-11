@@ -147,7 +147,7 @@ export default function NewBill() {
   return (
     <>
       <PageHeader title="New bill" titleMl="പുതിയ ബിൽ" ml="പറഞ്ഞാൽ മതി, ബിൽ റെഡി" />
-      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+      <div className="px-4 lg:px-8 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
         {/* Capture */}
         <section className="space-y-4 lg:col-start-1 lg:row-start-1">
           <div className="panel p-5 flex flex-col items-center text-center">
@@ -209,7 +209,7 @@ export default function NewBill() {
             <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">{t("Bill", "ബിൽ")}</h2>
               {heard && (
-                <p className="text-sm text-muted truncate" title={heard.transcript}>
+                <p className="min-w-0 text-sm text-muted truncate" title={heard.transcript}>
                   {t("Heard:", "കേട്ടത്:")} <span className="text-ink">“{heard.transcript}”</span>
                 </p>
               )}

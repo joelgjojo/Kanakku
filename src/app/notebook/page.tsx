@@ -57,7 +57,7 @@ export default function Notebook() {
   return (
     <>
       <PageHeader title="Notebook to Kanakku" titleMl="നോട്ട്ബുക്കിൽ നിന്ന് കണക്കിലേക്ക്" ml="ബുക്കിന്റെ ഫോട്ടോ എടുത്താൽ മതി" />
-      <div className="px-4 lg:px-8 grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
+      <div className="px-4 lg:px-8 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] lg:items-start">
         <section className="panel p-5 space-y-4">
           <p className="text-muted">{t("Take a photo of a page from your sales book or pattu book. Kanakku reads the handwriting and adds every line to your accounts.", "വിൽപ്പന ബുക്കിന്റെയോ പറ്റ് ബുക്കിന്റെയോ ഒരു പേജിന്റെ ഫോട്ടോ എടുക്കൂ. കയ്യക്ഷരം വായിച്ച് ഓരോ വരിയും കണക്ക് ചേർക്കും.")}</p>
           <div className="grid grid-cols-2 gap-2">
