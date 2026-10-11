@@ -82,22 +82,82 @@ async function downloadMedia(url: string, type: string | null): Promise<Media | 
   };
 }
 
-async function sendWhatsApp(to: string, from: string, body: string) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  if (!sid || !process.env.TWILIO_AUTH_TOKEN) return console.error("[kanakku] Can't send follow-up: Twilio keys missing");
-  let res: Response;
+type TwilioResult = { ok: boolean; status: number; sid?: string; state?: string; code?: number; message?: string };
+
+async function postMessage(fields: Record<string, string>): Promise<TwilioResult> {
   try {
-    res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
       method: "POST",
       headers: { Authorization: twilioAuth(), "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ To: to, From: from, Body: body.slice(0, 1550) }),
+      body: new URLSearchParams(fields),
     });
+    const out = (await res.json().catch(() => ({}))) as { sid?: string; status?: string; code?: number; message?: string };
+    return { ok: res.ok, status: res.status, sid: out.sid, state: out.status, code: out.code, message: out.message };
   } catch (e) {
-    return console.error(`[kanakku] Couldn't reach Twilio to send the reply: ${(e as Error).message}`);
+    return { ok: false, status: 0, message: `Couldn't reach Twilio: ${(e as Error).message}` };
   }
-  const out = (await res.json().catch(() => ({}))) as { sid?: string; status?: string; code?: number; message?: string };
-  if (!res.ok) console.error(`[kanakku] Twilio send FAILED (${res.status}) code ${out.code}: ${out.message} — from ${from} to ${to}`);
-  else console.log(`[kanakku] WhatsApp reply queued: ${out.sid} status=${out.status}`);
+}
+
+// Twilio's newer trial WhatsApp numbers refuse plain text (error 21654 "ContentSid Required")
+// and only send Content Templates. We keep one template whose whole body is a variable,
+// create it automatically the first time, and put the reply in that variable.
+// Inside the 24-hour window after the shopkeeper messages us, it doesn't need WhatsApp approval.
+const TEMPLATE_NAME = "kanakku_reply";
+let templateSid: string | null = process.env.TWILIO_CONTENT_SID || null;
+let useTemplate = !!templateSid;
+
+async function contentApi(path: string, init?: RequestInit) {
+  const res = await fetch(`https://content.twilio.com/v1/${path}`, {
+    ...init,
+    headers: { Authorization: twilioAuth(), "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+  return { ok: res.ok, status: res.status, data: (await res.json().catch(() => ({}))) as Record<string, unknown> };
+}
+
+async function ensureTemplate(): Promise<string | null> {
+  if (templateSid) return templateSid;
+  try {
+    const list = await contentApi("Content?PageSize=100");
+    const found = (list.data.contents as { sid: string; friendly_name: string }[] | undefined)?.find((c) => c.friendly_name === TEMPLATE_NAME);
+    if (found) return (templateSid = found.sid);
+    for (const body of ["{{1}}", "🧾 {{1}}"]) {
+      const made = await contentApi("Content", {
+        method: "POST",
+        body: JSON.stringify({ friendly_name: TEMPLATE_NAME, language: "en", variables: { "1": "Kanakku reply" }, types: { "twilio/text": { body } } }),
+      });
+      if (made.ok && made.data.sid) {
+        templateSid = String(made.data.sid);
+        console.log(`[kanakku] Created WhatsApp template ${templateSid}. Optional: set TWILIO_CONTENT_SID=${templateSid} in Vercel.`);
+        return templateSid;
+      }
+      console.error(`[kanakku] Template create failed (${made.status}): ${JSON.stringify(made.data).slice(0, 300)}`);
+    }
+  } catch (e) {
+    console.error(`[kanakku] Twilio Content API unreachable: ${(e as Error).message}`);
+  }
+  return null;
+}
+
+async function sendWhatsApp(to: string, from: string, body: string) {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return console.error("[kanakku] Can't send reply: Twilio keys missing");
+  const text = body.slice(0, 1500);
+
+  let r: TwilioResult | null = null;
+  if (!useTemplate) {
+    r = await postMessage({ To: to, From: from, Body: text });
+    if (r.code === 21654) useTemplate = true; // this sender only takes templates
+  }
+  if (useTemplate) {
+    const sid = await ensureTemplate();
+    if (!sid) return console.error("[kanakku] Twilio send FAILED: this WhatsApp number needs a template and one couldn't be created.");
+    r = await postMessage({ To: to, From: from, ContentSid: sid, ContentVariables: JSON.stringify({ "1": text }) });
+    // WhatsApp may refuse line breaks inside template variables. Flatten and retry once.
+    if (!r.ok && /new ?line|tab|variable|parameter|63005|63028|21656/i.test(`${r.code} ${r.message}`)) {
+      r = await postMessage({ To: to, From: from, ContentSid: sid, ContentVariables: JSON.stringify({ "1": text.replace(/\s*\n+\s*/g, " · ") }) });
+    }
+  }
+  if (r?.ok) console.log(`[kanakku] WhatsApp reply queued: ${r.sid} status=${r.state}${useTemplate ? " (template)" : ""}`);
+  else console.error(`[kanakku] Twilio send FAILED (${r?.status}) code ${r?.code}: ${r?.message} — from ${from} to ${to}`);
 }
 
 function escapeXml(s: string) {
