@@ -98,7 +98,26 @@ It checks the AI, saving a bill, stock, pattu, every bot command, the dashboard 
 3. **Deployments → ⋯ → Redeploy** so the keys take effect. Open the link: the sidebar should show green dots for Gemini and Supabase.
 4. `vercel.json` runs the app in Mumbai (`bom1`), next to the Supabase database, so pages load fast.
 
-**2. Real WhatsApp, free, through Meta's Cloud API (20 min)**
+**2. Real WhatsApp with no Facebook account: the bridge (10 min)**
+
+A small script on your laptop links a normal WhatsApp number to Kanakku, exactly like WhatsApp Web. No Meta, Twilio or card needed.
+
+1. Get a **spare WhatsApp number** on a phone (an old number or a second SIM). This is the number shopkeepers will message. **Don't use your main number**: WhatsApp doesn't officially allow bots on normal accounts, so it could get banned.
+2. Copy `bridge/.env.example` to `bridge/.env` and set `BRIDGE_ALLOW` to the numbers that should get replies (yours, teammates', the demo phone), comma separated, with country code and no `+`.
+3. Run:
+   ```bash
+   npm run whatsapp
+   ```
+4. A QR code appears in the terminal. On the spare phone: **WhatsApp → Settings → Linked devices → Link a device**, then scan it. (Or set `BRIDGE_PHONE` in `bridge/.env` to get an 8-digit code instead of a QR.)
+5. When it says **✅ Connected**, send "hi" to the spare number from your own phone. Kanakku replies.
+
+The login is saved in `bridge/auth/`, so next time `npm run whatsapp` connects straight away. Keep the laptop awake and the terminal open during the demo. The bridge talks to the deployed app (`KANAKKU_URL`), so bills still show up live on the dashboard.
+
+**Official alternatives (need an account in good standing):**
+- **Meta Cloud API** at `/api/whatsapp/meta`: needs a Facebook account Meta trusts. A brand-new account gets its WhatsApp Business Account locked (error 131031).
+- **Twilio** at `/api/whatsapp`: a trial account can't send replies, so it only works on an upgraded (paid) account.
+
+<details><summary>Meta Cloud API setup (if you have an established Facebook account)</summary>
 
 Meta gives every developer a free test WhatsApp number that can chat with up to 5 phones. No card, no Twilio.
 
@@ -128,6 +147,8 @@ Meta gives every developer a free test WhatsApp number that can chat with up to 
 - No `WhatsApp (Meta) in` line at all: the webhook isn't subscribed to **messages**, or the callback URL is wrong.
 
 Twilio is still supported at `/api/whatsapp`, but a Twilio **trial** account can't send replies (it demands message templates and then refuses to create them), so it only works on an upgraded account.
+
+</details>
 
 ---
 

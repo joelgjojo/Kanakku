@@ -1,0 +1,17 @@
+{
+  "name": "kanakku-whatsapp-bridge",
+  "private": true,
+  "type": "module",
+  "description": "Connects a normal WhatsApp number to Kanakku (like WhatsApp Web). Runs on a laptop.",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

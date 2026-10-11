@@ -10,7 +10,8 @@
     "test:ai": "tsx --env-file=.env.local scripts/test-gemini.mts",
     "test:parser": "tsx scripts/parse-test.ts",
     "test:db": "tsx --env-file=.env.local scripts/test-db.mts",
-    "test:app": "tsx --env-file=.env.local scripts/smoke.mts"
+    "test:app": "tsx --env-file=.env.local scripts/smoke.mts",
+    "whatsapp": "npm --prefix bridge install --no-audit --no-fund && npm --prefix bridge start"
   },
   "dependencies": {
     "@fontsource-variable/anek-malayalam": "^5.3.0",
