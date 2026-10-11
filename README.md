@@ -69,6 +69,7 @@ Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of 
 | Key | Needed for | Get it |
 |---|---|---|
 | `GEMINI_API_KEY` | Voice, notebook photos, shelf check, smarter parsing | Free at https://aistudio.google.com/apikey (new keys start with `AQ.`, which is fine) |
+| `GEMINI_API_KEY_2`, `GEMINI_API_KEY_3` (optional) | Backup free keys from teammates' Google accounts. A free key has a daily limit; when one runs out, Kanakku moves to the next key by itself. Strongly recommended for demo day. | Same page, signed in as a teammate |
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Cloud database (needed on Vercel so data survives restarts) | supabase.com → new project → run `supabase/schema.sql` in the SQL editor |
 | `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` + `WHATSAPP_VERIFY_TOKEN` | A real WhatsApp number (free) | Meta WhatsApp Cloud API test number (steps below) |
 

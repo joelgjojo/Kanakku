@@ -10,15 +10,27 @@ const MODELS = [
   "gemini-2.5-flash",
 ].filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
 
-let client: GoogleGenAI | null = null;
+// Free keys have small per-minute and per-day limits. Teammates can each add a free key:
+// GEMINI_API_KEY=key1,key2  (or GEMINI_API_KEY_2, GEMINI_API_KEY_3). When one key hits its limit, the next is used.
+const KEYS = [
+  ...(process.env.GEMINI_API_KEY ?? "").split(","),
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3,
+]
+  .map((k) => k?.trim())
+  .filter((k): k is string => !!k);
+const clients = new Map<string, GoogleGenAI>();
 
-export const hasGemini = () => !!process.env.GEMINI_API_KEY;
+export const hasGemini = () => KEYS.length > 0;
 
-function ai() {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
-  client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return client;
+function ai(key: string) {
+  let c = clients.get(key);
+  if (!c) clients.set(key, (c = new GoogleGenAI({ apiKey: key })));
+  return c;
 }
+
+// A model that just said "quota used up" or "too busy" is skipped for a while, so the next bill doesn't wait on it again.
+const restingUntil = new Map<string, number>();
 
 export interface Media {
   mimeType: string;
@@ -46,11 +58,13 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
   let lastErr: unknown;
   const started = Date.now();
   const tries: { model: string; ms: number; error?: string }[] = [];
-  for (const model of MODELS) {
+  const plan = MODELS.flatMap((model) => KEYS.map((key, k) => ({ model, key, slot: `${k}:${model}` })));
+  const fresh = plan.filter((p) => (restingUntil.get(p.slot) ?? 0) < Date.now());
+  for (const { model, key, slot } of fresh.length ? fresh : plan) {
     const t0 = Date.now();
     try {
       const call = (withThinking: boolean) =>
-        ai().models.generateContent({
+        ai(key).models.generateContent({
           model,
           contents: [{ role: "user", parts }],
           config: {
@@ -77,10 +91,13 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
     } catch (e) {
       lastErr = e;
       const msg = String((e as Error)?.message ?? e);
-      tries.push({ model, ms: Date.now() - t0, error: msg.slice(0, 80) });
+      tries.push({ model, ms: Date.now() - t0, error: msg.replace(/\s+/g, " ").slice(0, 80) });
       lastCall = { model: null, ms: Date.now() - started, tries };
-      // Only move to the next model for "model not found / overloaded / quota" style errors.
-      if (!/404|not found|unsupported|429|quota|exhausted|503|overloaded|unavailable/i.test(msg)) break;
+      if (/429|quota|exhausted/i.test(msg)) restingUntil.set(slot, Date.now() + 60_000);
+      else if (/503|overloaded|unavailable|high demand/i.test(msg)) restingUntil.set(slot, Date.now() + 20_000);
+      else if (/404|not found|unsupported/i.test(msg)) restingUntil.set(slot, Date.now() + 3_600_000);
+      // Only move on for "model not found / overloaded / quota" style errors.
+      else break;
     }
   }
   throw friendly(lastErr);
