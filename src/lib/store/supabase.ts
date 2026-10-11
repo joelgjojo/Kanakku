@@ -165,6 +165,10 @@ export class SupabaseStore implements Store {
     }
     return rows.map(toBill);
   }
+  async getBill(id: string) {
+    const { data } = await this.db.from("bills").select("*").eq("id", id).maybeSingle();
+    return data ? toBill(data as Row) : null;
+  }
   async insertBill(b: Omit<Bill, "number">) {
     const row = must(await this.db.from("bills").insert(fromBill(b)).select().single());
     return toBill(row as unknown as Row);

@@ -8,6 +8,7 @@
 //   KANAKKU_URL    = https://kanakku-kappa.vercel.app   (where Kanakku runs)
 //   BRIDGE_ALLOW   = 918943262406,91XXXXXXXXXX          (only these numbers get replies; recommended)
 //   BRIDGE_PHONE   = 91XXXXXXXXXX                        (optional: the bridge's own number, to link with a code instead of a QR)
+//   SHOP_PIN       = the app's shop PIN, if you locked the app with one (read from ../.env.local too)
 //   BRIDGE_OWNER   = 91XXXXXXXXXX                        (who gets the daily messages; default: first number in BRIDGE_ALLOW)
 //   DIGEST_MORNING = 08:00   DIGEST_EVENING = 21:00      (when Kanakku messages the owner by itself; "off" to stop)
 //
@@ -48,6 +49,8 @@ const PAIR_PHONE = (process.env.BRIDGE_PHONE || "").replace(/\D/g, "");
 const OWNER = (process.env.BRIDGE_OWNER || "").replace(/\D/g, "") || ALLOW[0] || "";
 const AT = { morning: process.env.DIGEST_MORNING || "08:00", evening: process.env.DIGEST_EVENING || "21:00" };
 const AUTH_DIR = path.join(here, "auth");
+// When the app is locked with a shop PIN, the bridge proves it's ours by sending it.
+const HEADERS = process.env.SHOP_PIN ? { "x-shop-pin": process.env.SHOP_PIN } : {};
 const logger = P({ level: "silent" });
 
 const say = (...a) => console.log(new Date().toLocaleTimeString("en-IN"), ...a);
@@ -173,9 +176,9 @@ async function handle(sock, m) {
 
   let reply;
   try {
-    const res = await fetch(`${KANAKKU_URL}/api/bot`, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
+    const res = await fetch(`${KANAKKU_URL}/api/bot`, { method: "POST", body: form, headers: HEADERS, signal: AbortSignal.timeout(60_000) });
     const data = await res.json().catch(() => ({}));
-    reply = data.reply || data.error || `Kanakku returned ${res.status}`;
+    reply = data.reply || (res.status === 401 ? "🔒 Kanakku is locked with a shop PIN. Put the same SHOP_PIN in bridge/.env and restart the bridge." : data.error) || `Kanakku returned ${res.status}`;
   } catch (e) {
     reply = `⚠️ Can't reach Kanakku right now (${e.name === "TimeoutError" ? "timed out" : e.message}).`;
   }
@@ -195,7 +198,7 @@ async function sendDigest(kind) {
   const form = new FormData();
   form.append("text", kind);
   try {
-    const res = await fetch(`${KANAKKU_URL}/api/bot`, { method: "POST", body: form, signal: AbortSignal.timeout(60_000) });
+    const res = await fetch(`${KANAKKU_URL}/api/bot`, { method: "POST", body: form, headers: HEADERS, signal: AbortSignal.timeout(60_000) });
     const data = await res.json();
     if (!data.reply) throw new Error(data.error || `status ${res.status}`);
     await current.sendMessage(`${OWNER}@s.whatsapp.net`, { text: data.reply });

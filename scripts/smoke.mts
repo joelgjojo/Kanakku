@@ -23,8 +23,11 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
 }
 
+// If the app is locked with a shop PIN, the scripts send it like the WhatsApp bridge does.
+const PIN = process.env.SHOP_PIN ? { "x-shop-pin": process.env.SHOP_PIN } : {};
+
 async function json<T = any>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, init);
+  const res = await fetch(BASE + path, { ...init, headers: { ...PIN, ...(init?.headers as Record<string, string>) } });
   const body = await res.text();
   if (!res.ok) throw new Error(`${res.status} from ${path}: ${body.slice(0, 200)}`);
   return JSON.parse(body) as T;
@@ -158,7 +161,7 @@ await check("Profit on the dashboard", async () => {
 });
 
 await check("Loan report page", async () => {
-  const res = await fetch(`${BASE}/report`);
+  const res = await fetch(`${BASE}/report`, { headers: PIN });
   const html = await res.text();
   assert(res.ok && /Collection rate/.test(html), `${res.status}`);
   return "renders";

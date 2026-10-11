@@ -14,7 +14,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
-      items: BillItem[]; customerName?: string; customerId?: string; paymentMode: PaymentMode;
+      id?: string; items: BillItem[]; customerName?: string; customerId?: string; paymentMode: PaymentMode;
       source?: Source; rawInput?: string; createdAt?: string;
     };
     if (!body.items?.length) throw new Error("Add at least one item");

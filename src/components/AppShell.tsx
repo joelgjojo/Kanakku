@@ -55,13 +55,13 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { ml } = useLang();
   const [status, setStatus] = useState<Status | null>(null);
   useEffect(() => {
-    if (path.startsWith("/k/")) return;
+    if (path.startsWith("/k/") || path === "/login") return;
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
   }, [path]);
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
-  // Customer pages (/k/…) are for the shop's customers: no shop menus there.
-  if (path.startsWith("/k/")) return <>{children}</>;
+  // Customer pages (/k/…) are for the shop's customers, and /login is before the PIN: no shop menus there.
+  if (path.startsWith("/k/") || path === "/login") return <>{children}</>;
 
   return (
     <div className="min-h-dvh lg:flex">

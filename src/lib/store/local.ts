@@ -80,8 +80,12 @@ export class LocalStore implements Store {
     const since = Date.now() - sinceDays * 86400000;
     return bills.filter((b) => new Date(b.createdAt).getTime() >= since);
   }
+  async getBill(id: string) {
+    return (await this.load()).bills.find((b) => b.id === id) ?? null;
+  }
   insertBill(b: Omit<Bill, "number">) {
     return this.write((db) => {
+      if (db.bills.some((x) => x.id === b.id)) throw new Error("duplicate bill id");
       const number = db.bills.reduce((m, x) => Math.max(m, x.number), 0) + 1;
       const bill = { ...b, number };
       db.bills.push(bill);

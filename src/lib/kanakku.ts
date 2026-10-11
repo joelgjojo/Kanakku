@@ -61,6 +61,8 @@ export function toBillItems(items: ParsedItem[], products: Product[]): BillItem[
 }
 
 export interface NewBill {
+  /** Made by the phone before sending, so a bill retried after a dropped connection is saved only once. */
+  id?: string;
   items: BillItem[];
   customerName?: string | null;
   customerId?: string | null;
@@ -72,25 +74,40 @@ export interface NewBill {
   affectStock?: boolean;
 }
 
+const CLIENT_ID = /^b-[A-Za-z0-9_-]{8,64}$/;
+
 export async function createBill(input: NewBill): Promise<Bill> {
   const store = getStore();
+  const clientId = input.id && CLIENT_ID.test(input.id) ? input.id : null;
+  if (clientId) {
+    const existing = await store.getBill(clientId);
+    if (existing) return existing; // already saved: a retry, not a new sale
+  }
   let customer: Customer | null = null;
   if (input.customerId) customer = (await store.listCustomers()).find((c) => c.id === input.customerId) ?? null;
   if (!customer) customer = await resolveCustomer(input.customerName);
   if (input.paymentMode === "credit" && !customer) throw new Error("Pattu needs a customer name");
 
   const items = input.items.map((i) => ({ ...i, total: round2(i.qty * i.price) }));
-  const bill = await store.insertBill({
-    id: uid("b"),
-    createdAt: input.createdAt ?? new Date().toISOString(),
-    customerId: customer?.id ?? null,
-    customerName: customer?.name ?? null,
-    items,
-    total: round2(items.reduce((s, i) => s + i.total, 0)),
-    paymentMode: input.paymentMode,
-    source: input.source,
-    rawInput: input.rawInput,
-  });
+  let bill: Bill;
+  try {
+    bill = await store.insertBill({
+      id: clientId ?? uid("b"),
+      createdAt: input.createdAt ?? new Date().toISOString(),
+      customerId: customer?.id ?? null,
+      customerName: customer?.name ?? null,
+      items,
+      total: round2(items.reduce((s, i) => s + i.total, 0)),
+      paymentMode: input.paymentMode,
+      source: input.source,
+      rawInput: input.rawInput,
+    });
+  } catch (e) {
+    // Two copies of the same retried bill arrived together: the first one won.
+    const existing = clientId ? await store.getBill(clientId) : null;
+    if (existing) return existing;
+    throw e;
+  }
   if (input.affectStock !== false) {
     for (const i of items) if (i.productId) await store.adjustStock(i.productId, -i.qty);
   }

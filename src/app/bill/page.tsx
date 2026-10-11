@@ -7,7 +7,7 @@ import { qtyLabel, rupees, unitLabel } from "@/lib/format";
 import type { Bill, BillItem, ParsedMessage, PaymentMode, Product } from "@/lib/types";
 import type { Balance } from "@/lib/kanakku";
 import { useRecorder } from "@/components/useRecorder";
-import { enqueueBill } from "@/components/OfflineSync";
+import { enqueueBill, newBillId } from "@/components/OfflineSync";
 import { Button, ErrorNote, PageHeader, Segmented, inputCls } from "@/components/ui";
 import { trustLabel, trustReason, useLang } from "@/lib/i18n";
 
@@ -104,6 +104,7 @@ export default function NewBill() {
     setError(null);
     if (mode === "credit" && !customer.trim()) return setError(t("Pattu needs a customer name.", "പറ്റിന് ആളുടെ പേര് വേണം."));
     const body = {
+      id: newBillId(),
       items: items.filter((i) => i.qty > 0),
       customerName: customer.trim() || null,
       paymentMode: mode,
@@ -118,7 +119,9 @@ export default function NewBill() {
       reset();
       api<Balance[]>("/api/customers").then(setCustomers).catch(() => {});
     } catch (e) {
-      if (!navigator.onLine || (e as Error).message.includes("fetch")) {
+      // No answer from the server (offline or the connection dropped): keep the bill on the phone.
+      // It carries its own id, so if the server did save it, the retry won't add it twice.
+      if (!navigator.onLine || /fetch|network|load failed/i.test((e as Error).message)) {
         enqueueBill(body);
         setSaved({ bill: null, due: null, offline: true });
         reset();

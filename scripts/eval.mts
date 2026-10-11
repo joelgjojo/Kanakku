@@ -72,7 +72,7 @@ async function parse(text: string): Promise<any> {
   if (offline) return offlineParse(text, seed.products, seed.customers);
   const f = new FormData();
   f.append("text", text);
-  const res = await fetch(`${BASE}/api/ai/parse`, { method: "POST", body: f });
+  const res = await fetch(`${BASE}/api/ai/parse`, { method: "POST", body: f, headers: process.env.SHOP_PIN ? { "x-shop-pin": process.env.SHOP_PIN } : {} });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body.parsed;

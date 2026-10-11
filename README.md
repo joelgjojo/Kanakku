@@ -99,6 +99,18 @@ Then **Stock → Reset to the starting demo** to load demo data with cost prices
 
 For the UPI pay button, set `NEXT_PUBLIC_UPI_ID` (for example `yourname@okaxis`) in `.env.local` and in Vercel. Payments go straight to that UPI ID, so use one your team controls.
 
+### Lock the shop with a PIN
+
+Out of the box anyone with the link can see and change the shop's data. To lock it, set `SHOP_PIN` (6 digits or more) in `.env.local` and in Vercel, then redeploy.
+
+- Every page and API needs the PIN; the phone stays logged in for 30 days. Wrong guesses are slowed down.
+- Customers' pattu pages (`/k/...`), the privacy page and the signed WhatsApp webhooks stay public.
+- The WhatsApp bridge reads `SHOP_PIN` from `bridge/.env` (or `.env.local`) and sends it, so add it there too and restart `npm run whatsapp`. The test scripts send it the same way.
+
+### Bills are never lost or doubled offline
+
+Each bill gets its own id on the phone before it's sent. If the connection drops, the bill waits on the phone and is sent again later; if the server had already saved it, the repeat is recognised and not added twice. A bill leaves the phone only when the server confirms it, and one the server refuses is shown with **Try again** / **Discard** instead of being thrown away.
+
 ### Before going on stage
 
 Go to **Stock → Reset to the starting demo** so the numbers are clean.

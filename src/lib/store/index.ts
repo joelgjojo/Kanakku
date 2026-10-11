@@ -13,6 +13,7 @@ export interface Store {
 
   listBills(sinceDays?: number): Promise<Bill[]>;
   insertBill(b: Omit<Bill, "number">): Promise<Bill>;
+  getBill(id: string): Promise<Bill | null>;
 
   listPayments(): Promise<Payment[]>;
   insertPayment(p: Payment): Promise<Payment>;
