@@ -47,10 +47,17 @@ const say = (...a) => console.log(new Date().toLocaleTimeString("en-IN"), ...a);
 
 console.log(`\n🧾 Kanakku WhatsApp bridge`);
 console.log(`   Kanakku: ${KANAKKU_URL}`);
-console.log(ALLOW.length ? `   Replies only to: ${ALLOW.join(", ")}` : `   ⚠️  Replies to EVERYONE who messages this number. Set BRIDGE_ALLOW to limit it.`);
+console.log(ALLOW.length ? `   Replies only to: ${ALLOW.join(", ")}, plus anyone who sends "join kanakku"` : `   ⚠️  Replies to EVERYONE who messages this number. Set BRIDGE_ALLOW to limit it.`);
 
 const digits = (jid) => (jid || "").split("@")[0].split(":")[0].replace(/\D/g, "");
-const allowed = (...jids) => !ALLOW.length || jids.some((j) => j && ALLOW.some((a) => digits(j).endsWith(a.slice(-10))));
+
+// People who sent the join code are remembered here, so judges can opt in on the spot.
+const JOINED_FILE = path.join(here, "joined.json");
+const joined = new Set(fs.existsSync(JOINED_FILE) ? JSON.parse(fs.readFileSync(JOINED_FILE, "utf8")) : []);
+const JOIN_CODE = /^\s*(join\s+)?kanakku\s*!?\s*$/i;
+const allowed = (...jids) =>
+  !ALLOW.length ||
+  jids.some((j) => j && (joined.has(j) || ALLOW.some((a) => digits(j).endsWith(a.slice(-10)))));
 const seen = new Set();
 
 async function start() {
@@ -106,8 +113,16 @@ async function start() {
       seen.add(m.key.id);
       if (seen.size > 1000) seen.delete(seen.values().next().value);
       if (!allowed(jid, m.key.remoteJidAlt)) {
-        say(`Ignored message from ${digits(m.key.remoteJidAlt || jid)} (not in BRIDGE_ALLOW)`);
-        continue;
+        const body = normalizeMessageContent(m.message)?.conversation || normalizeMessageContent(m.message)?.extendedTextMessage?.text || "";
+        if (JOIN_CODE.test(body)) {
+          joined.add(jid);
+          fs.writeFileSync(JOINED_FILE, JSON.stringify([...joined]));
+          say(`➕ ${digits(m.key.remoteJidAlt || jid)} joined with the code`);
+          m.message = { conversation: "hi" }; // answer with the welcome menu
+        } else {
+          say(`Ignored message from ${digits(m.key.remoteJidAlt || jid)} (not allowed; they can send "join kanakku")`);
+          continue;
+        }
       }
       handle(sock, m).catch((e) => say(`⚠️ ${e.message}`));
     }
