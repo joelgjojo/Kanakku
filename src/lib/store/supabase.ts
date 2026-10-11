@@ -133,9 +133,16 @@ export class SupabaseStore implements Store {
 
   async listBills(sinceDays?: number) {
     await this.ensureSeeded();
-    let q = this.db.from("bills").select("*").order("created_at");
-    if (sinceDays) q = q.gte("created_at", new Date(Date.now() - sinceDays * 86400000).toISOString());
-    return must(await q.limit(5000)).map(toBill);
+    // Supabase returns at most 1000 rows per request, so read in pages.
+    const rows: Row[] = [];
+    for (let from = 0; ; from += 1000) {
+      let q = this.db.from("bills").select("*").order("created_at").order("id");
+      if (sinceDays) q = q.gte("created_at", new Date(Date.now() - sinceDays * 86400000).toISOString());
+      const page = must(await q.range(from, from + 999)) as Row[];
+      rows.push(...page);
+      if (page.length < 1000) break;
+    }
+    return rows.map(toBill);
   }
   async insertBill(b: Omit<Bill, "number">) {
     const row = must(await this.db.from("bills").insert(fromBill(b)).select().single());

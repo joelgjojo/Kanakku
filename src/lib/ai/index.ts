@@ -130,7 +130,7 @@ ${catalogue(products)}
 
 KNOWN CUSTOMERS:
 ${people(customers)}`;
-  return askJSON<NotebookResult>(prompt, NOTEBOOK_SCHEMA, image);
+  return askJSON<NotebookResult>(prompt, NOTEBOOK_SCHEMA, image, "careful");
 }
 
 const SHELF_SCHEMA = {
@@ -163,5 +163,5 @@ Only report products you can actually see. Map each to the catalogue id when you
 
 CATALOGUE (id | name | Malayalam | other names | unit | price):
 ${catalogue(products)}`;
-  return askJSON<ShelfResult>(prompt, SHELF_SCHEMA, image);
+  return askJSON<ShelfResult>(prompt, SHELF_SCHEMA, image, "careful");
 }

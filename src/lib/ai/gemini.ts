@@ -25,8 +25,17 @@ export interface Media {
   data: string; // base64
 }
 
+// A bill doesn't need deep reasoning: minimal thinking cuts the wait from ~6 s to ~2 s.
+// Handwriting and shelf counting get a little more.
+export type Effort = "fast" | "careful";
+
+function thinking(model: string, effort: Effort) {
+  if (/^gemini-2/.test(model)) return { thinkingBudget: effort === "fast" ? 0 : 1024 };
+  return { thinkingLevel: (effort === "fast" ? "MINIMAL" : "LOW") as never };
+}
+
 /** Ask Gemini for JSON matching `schema`. Media (audio/image) is optional. */
-export async function askJSON<T>(prompt: string, schema: object, media?: Media): Promise<T> {
+export async function askJSON<T>(prompt: string, schema: object, media?: Media, effort: Effort = "fast"): Promise<T> {
   const parts: { text?: string; inlineData?: Media }[] = [];
   if (media) parts.push({ inlineData: { mimeType: cleanMime(media.mimeType), data: media.data } });
   parts.push({ text: prompt });
@@ -34,15 +43,25 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media):
   let lastErr: unknown;
   for (const model of MODELS) {
     try {
-      const res = await ai().models.generateContent({
-        model,
-        contents: [{ role: "user", parts }],
-        config: {
-          responseMimeType: "application/json",
-          responseJsonSchema: schema,
-          temperature: 0.1,
-        },
-      });
+      const call = (withThinking: boolean) =>
+        ai().models.generateContent({
+          model,
+          contents: [{ role: "user", parts }],
+          config: {
+            responseMimeType: "application/json",
+            responseJsonSchema: schema,
+            temperature: 0.1,
+            ...(withThinking ? { thinkingConfig: thinking(model, effort) } : {}),
+          },
+        });
+      let res;
+      try {
+        res = await call(true);
+      } catch (e) {
+        // Some models don't accept a thinking setting. Ask again without it.
+        if (!/thinking/i.test(String((e as Error)?.message))) throw e;
+        res = await call(false);
+      }
       const text = res.text;
       if (!text) throw new Error("Empty response from Gemini");
       return JSON.parse(text) as T;

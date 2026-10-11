@@ -46,6 +46,7 @@ Check the AI key before anything else:
 
 ```bash
 npm run test:ai      # parses 3 Malayalam/Manglish bills with Gemini and prints the result
+npm run test:db      # only after setting up Supabase (below)
 ```
 
 Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of history loads by itself.
@@ -60,7 +61,19 @@ Open http://localhost:3000. A demo shop (Ammu Stores, Kollam) with two weeks of 
 | `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Cloud database (needed on Vercel so data survives restarts) | supabase.com → new project → run `supabase/schema.sql` in the SQL editor |
 | `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `PUBLIC_URL` | A real WhatsApp number | Twilio WhatsApp sandbox (steps on the `/whatsapp` page) |
 
-Without Supabase, data is saved to `.data/kanakku.json` on your laptop. That's perfect for the demo laptop.
+Without Supabase, data is saved to `.data/kanakku.json` on your laptop. That's fine for a demo run entirely from one laptop.
+
+### Supabase setup (10 minutes)
+
+1. Go to [supabase.com](https://supabase.com), sign in with GitHub, and click **New project**. Pick region **Mumbai (ap-south-1)** and save the database password somewhere.
+2. Open **SQL Editor → New query**, paste everything from `supabase/schema.sql`, and click **Run**.
+3. Open **Project Settings → API Keys** (or **Data API**). Copy:
+   - the **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - the **service_role / secret** key → `SUPABASE_SERVICE_ROLE_KEY` (not the anon/publishable one)
+4. Paste both into `.env.local`, then run `npm run test:db`. The first run loads the demo shop into the database.
+5. Restart `npm run dev`. The sidebar should say **Saved to Supabase**.
+
+The service_role key can read and write everything. Keep it only in `.env.local` and in Vercel's environment variables. Never put it in the code or in a chat.
 
 ### Before going on stage
 

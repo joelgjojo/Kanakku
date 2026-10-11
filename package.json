@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:ai": "tsx --env-file=.env.local scripts/test-gemini.mts",
-    "test:parser": "tsx scripts/parse-test.ts"
+    "test:parser": "tsx scripts/parse-test.ts",
+    "test:db": "tsx --env-file=.env.local scripts/test-db.mts"
   },
   "dependencies": {
     "@fontsource-variable/anek-malayalam": "^5.3.0",
