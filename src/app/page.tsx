@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { Camera, MessageCircle, Mic, PenLine, Truck } from "lucide-react";
+import { Camera, FileText, MessageCircle, Mic, PenLine, ShieldAlert, Truck, Wallet } from "lucide-react";
 import type { Dashboard } from "@/lib/analytics";
 import { api, waLink } from "@/lib/client";
 import { qtyLabel, rupees, timeAgo } from "@/lib/format";
 import { SalesChart } from "@/components/SalesChart";
+import { AskKanakku } from "@/components/AskKanakku";
 import { ErrorNote, Money, PageHeader, SourceIcon, Spinner } from "@/components/ui";
 
 export default function Today() {
@@ -45,6 +46,9 @@ export default function Today() {
   return (
     <>
       <PageHeader title="Today" ml={date}>
+        <Link href="/report" className="inline-flex items-center gap-2 h-10 rounded-lg border border-line bg-paper px-3 text-sm font-semibold hover:bg-wall">
+          <FileText size={16} /> Loan report
+        </Link>
         <Link href="/bill" className="inline-flex items-center gap-2 h-10 rounded-lg bg-pen px-4 font-semibold text-white hover:bg-pen-dark">
           <Mic size={17} /> New bill
         </Link>
@@ -58,6 +62,13 @@ export default function Today() {
             <p className="sign num text-[3.4rem] lg:text-[4.2rem] text-ink">{rupees(d.today.sales)}</p>
             <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[0.95rem]">
               <div><dt className="inline text-muted">Bills </dt><dd className="inline num font-semibold">{d.today.bills}</dd></div>
+              {d.today.margin !== null && (
+                <div title="Estimated from supplier bill prices">
+                  <dt className="inline text-muted">Profit </dt>
+                  <dd className="inline num font-semibold text-leaf">~{rupees(d.today.profit)}</dd>
+                  <dd className="inline text-xs text-muted"> ({d.today.margin}%)</dd>
+                </div>
+              )}
               <div><dt className="inline text-muted">Pattu given </dt><dd className="inline num font-semibold text-due">{rupees(d.today.creditGiven)}</dd></div>
               <div><dt className="inline text-muted">Pattu collected </dt><dd className="inline num font-semibold text-leaf">{rupees(d.today.collected)}</dd></div>
             </dl>
@@ -80,6 +91,8 @@ export default function Today() {
             </div>
           </div>
         </section>
+
+        <AskKanakku />
 
         <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
           <div className="space-y-5 min-w-0">
@@ -161,7 +174,10 @@ export default function Today() {
                 {d.pattu.top.map((p) => (
                   <li key={p.id}>
                     <Link href={`/pattu?c=${p.id}`} className="flex items-center justify-between gap-3 rounded-md px-1 -mx-1 hover:bg-wall">
-                      <span className="truncate">{p.nameMl ?? p.name} {p.days > 7 && <span className="text-xs text-warn">· {p.days} days</span>}</span>
+                      <span className="truncate flex items-center gap-1.5">
+                        {p.over && <ShieldAlert size={14} className="text-due shrink-0" aria-label="Over pattu limit" />}
+                        {p.nameMl ?? p.name} {p.days > 7 && <span className="text-xs text-warn">· {p.days} days</span>}
+                      </span>
                       <Money value={p.due} className="font-semibold" />
                     </Link>
                   </li>
@@ -169,26 +185,87 @@ export default function Today() {
               </ul>
             </section>
 
-            <section className="panel p-5">
-              <h2 className="text-lg font-semibold mb-2">Best sellers this week</h2>
-              <ol className="space-y-1.5">
-                {d.top.map((t, i) => (
-                  <li key={t.name} className="flex items-center gap-3">
-                    <span className="w-4 text-sm text-faint num">{i + 1}</span>
-                    <span className="flex-1 truncate">{t.nameMl ?? t.name}</span>
-                    <Money value={t.revenue} className="text-muted" />
-                  </li>
-                ))}
-              </ol>
-              {d.dead.length > 0 && (
-                <p className="mt-4 text-sm text-muted">
-                  Not sold in a week: <span className="text-ink">{d.dead.map((f) => f.product.nameMl).join(", ")}</span>
-                </p>
-              )}
-            </section>
+            <DayClose cash={d.today.cash} collected={d.today.collected} upi={d.today.upi} />
+
+            <BestSellers d={d} />
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+function BestSellers({ d }: { d: Dashboard }) {
+  const [by, setBy] = useState<"sales" | "profit">("sales");
+  const list = by === "sales" ? d.top.map((t) => ({ ...t, value: t.revenue })) : d.topProfit.map((t) => ({ ...t, value: t.profit }));
+  return (
+    <section className="panel p-5">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg font-semibold">This week&apos;s best</h2>
+        <div className="flex rounded-md bg-wall p-0.5 text-xs font-semibold" role="radiogroup" aria-label="Rank by">
+          {(["sales", "profit"] as const).map((k) => (
+            <button key={k} role="radio" aria-checked={by === k} onClick={() => setBy(k)} className={clsx("rounded px-2 py-1", by === k ? "bg-paper text-ink" : "text-muted")}>
+              {k === "sales" ? "Sales" : "Profit"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ol className="space-y-1.5">
+        {list.map((t, i) => (
+          <li key={t.name} className="flex items-center gap-3">
+            <span className="w-4 text-sm text-faint num">{i + 1}</span>
+            <span className="flex-1 truncate">{t.nameMl ?? t.name}</span>
+            <Money value={t.value} className={by === "profit" ? "text-leaf" : "text-muted"} />
+          </li>
+        ))}
+        {list.length === 0 && <li className="text-sm text-muted">Scan a supplier bill to see profit per item.</li>}
+      </ol>
+      {d.week.margin !== null && (
+        <p className="mt-3 text-sm text-muted">
+          Week: <b className="num text-ink">{rupees(d.week.sales)}</b> sales, about <b className="num text-leaf">{rupees(d.week.profit)}</b> profit ({d.week.margin}%)
+        </p>
+      )}
+      {d.dead.length > 0 && (
+        <p className="mt-3 text-sm text-muted">
+          Not sold in a week: <span className="text-ink">{d.dead.map((f) => f.product.nameMl).join(", ")}</span>
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** End of day: does the cash drawer match the books? */
+function DayClose({ cash, collected, upi }: { cash: number; collected: number; upi: number }) {
+  const [opening, setOpening] = useState("");
+  const [counted, setCounted] = useState("");
+  const expected = Math.round((Number(opening) || 0) + cash + collected);
+  const diff = counted === "" ? null : Math.round(Number(counted) - expected);
+  return (
+    <section className="panel p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Wallet size={18} className="text-pen" />
+        <h2 className="text-lg font-semibold">Close the day</h2>
+      </div>
+      <p className="text-sm text-muted">Count the cash drawer. Kanakku tells you if anything is missing.</p>
+      <dl className="mt-3 space-y-1 text-[0.95rem]">
+        <div className="flex justify-between"><dt className="text-muted">Cash sales</dt><dd className="num">{rupees(cash)}</dd></div>
+        <div className="flex justify-between"><dt className="text-muted">Pattu paid back in cash</dt><dd className="num">{rupees(collected)}</dd></div>
+        <div className="flex justify-between text-faint"><dt>UPI (already in bank)</dt><dd className="num">{rupees(upi)}</dd></div>
+      </dl>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="text-xs text-muted">Opening cash
+          <input type="number" inputMode="decimal" min={0} value={opening} onChange={(e) => setOpening(e.target.value)} placeholder="₹0" className="num mt-1 h-10 w-full rounded-lg border border-line bg-paper px-3 text-[0.95rem] text-ink" />
+        </label>
+        <label className="text-xs text-muted">Cash counted now
+          <input type="number" inputMode="decimal" min={0} value={counted} onChange={(e) => setCounted(e.target.value)} placeholder={`₹${expected}`} className="num mt-1 h-10 w-full rounded-lg border border-line bg-paper px-3 text-[0.95rem] text-ink" />
+        </label>
+      </div>
+      <p className="mt-3 text-sm">Should be <b className="num">{rupees(expected)}</b></p>
+      {diff !== null && (
+        <p className={clsx("mt-2 rounded-lg px-3 py-2 text-sm font-semibold slip-in", Math.abs(diff) < 10 ? "bg-leaf-soft text-leaf" : diff < 0 ? "bg-due-soft text-due" : "bg-warn-soft text-warn")}>
+          {Math.abs(diff) < 10 ? "✓ Drawer matches the books." : diff < 0 ? `${rupees(-diff)} short. A sale may not be billed, or change was given wrong.` : `${rupees(diff)} extra. A bill may have been missed or entered twice.`}
+        </p>
+      )}
+    </section>
   );
 }

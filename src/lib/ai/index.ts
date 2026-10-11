@@ -1,6 +1,6 @@
 import { askJSON, hasGemini, type Media } from "./gemini";
 import { offlineParse } from "./offline";
-import type { Customer, NotebookResult, ParsedMessage, Product, ShelfResult } from "../types";
+import type { Customer, NotebookResult, ParsedMessage, Product, PurchaseResult, ShelfResult } from "../types";
 
 const catalogue = (products: Product[]) =>
   products.map((p) => `${p.id} | ${p.name} | ${p.nameMl} | ${p.aliases.join(", ")} | per ${p.unit} | ₹${p.price}`).join("\n");
@@ -23,7 +23,7 @@ const ITEM_SCHEMA = {
 const MESSAGE_SCHEMA = {
   type: "object",
   properties: {
-    intent: { type: "string", enum: ["sale", "payment", "restock", "stock_query", "credit_query", "summary", "unknown"] },
+    intent: { type: "string", enum: ["sale", "payment", "restock", "stock_query", "credit_query", "summary", "question", "unknown"] },
     transcript: { type: "string", description: "exact words spoken or typed, in the original script" },
     customerName: { type: ["string", "null"] },
     paymentMode: { type: "string", enum: ["cash", "upi", "credit"] },
@@ -44,6 +44,7 @@ Decide the intent:
 - stock_query: asking what is low or what stock is left.
 - credit_query: asking who owes money / pattu list.
 - summary: asking for today's sales / kanakku.
+- question: any other question about the shop's business: profit, best or worst sellers, a customer's habits, what to order, comparisons. "ഈ ആഴ്ച ലാഭം എത്ര?", "which item makes most money?"
 - unknown: anything else.
 
 Rules:
@@ -164,4 +165,76 @@ Only report products you can actually see. Map each to the catalogue id when you
 CATALOGUE (id | name | Malayalam | other names | unit | price):
 ${catalogue(products)}`;
   return askJSON<ShelfResult>(prompt, SHELF_SCHEMA, image, "careful");
+}
+
+const PURCHASE_SCHEMA = {
+  type: "object",
+  properties: {
+    supplier: { type: ["string", "null"] },
+    invoiceDate: { type: ["string", "null"], description: "YYYY-MM-DD" },
+    invoiceTotal: { type: ["number", "null"] },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          productId: { type: ["string", "null"], description: "id from the catalogue, or null for a new item" },
+          name: { type: "string", description: "short English product name" },
+          nameMl: { type: ["string", "null"], description: "Malayalam name if known" },
+          qty: { type: "number", description: "quantity in the catalogue unit (a 25 kg bag of a per-kg item = 25; a box of 12 packets of a per-pkt item = 12)" },
+          unit: { type: "string", enum: ["kg", "l", "pc", "pkt"] },
+          unitCost: { type: "number", description: "₹ the shop pays per ONE catalogue unit, after discounts, including GST" },
+          total: { type: "number", description: "line amount in ₹" },
+        },
+        required: ["productId", "name", "nameMl", "qty", "unit", "unitCost", "total"],
+      },
+    },
+  },
+  required: ["supplier", "invoiceDate", "invoiceTotal", "items"],
+};
+
+/** Read a distributor/wholesaler bill: what arrived and what the shop paid per unit. */
+export async function readPurchaseBill(image: Media, products: Product[]): Promise<PurchaseResult> {
+  if (!hasGemini()) throw new Error("Reading supplier bills needs GEMINI_API_KEY in .env.local");
+  const prompt = `The attached photo is a bill or invoice from a wholesaler or distributor to a small Kerala grocery shop.
+It may be printed or handwritten, in English or Malayalam, with GST, discounts and pack sizes.
+
+For each line, work out:
+- which catalogue product it is (match brand names and Malayalam names; productId null if it's a new item)
+- the quantity in the catalogue unit: convert packs, bags, boxes and grams. A 25 kg rice bag = 25 (kg). 500 g = 0.5 (kg). A case of 24 soaps = 24 (pc).
+- unitCost: the shop's real cost per ONE catalogue unit, after any discount and including GST
+Skip totals, taxes and transport lines as separate items. Read the invoice total if printed.
+
+CATALOGUE (id | name | Malayalam | other names | unit | selling price):
+${catalogue(products)}`;
+  return askJSON<PurchaseResult>(prompt, PURCHASE_SCHEMA, image, "careful");
+}
+
+const ASK_SCHEMA = {
+  type: "object",
+  properties: {
+    answer: { type: "string", description: "the reply to the shopkeeper" },
+    heard: { type: "string", description: "the question as heard, in the original language" },
+  },
+  required: ["answer", "heard"],
+};
+
+/** Answer a free question about the shop from its own numbers. */
+export async function askShop(question: { text?: string; audio?: Media }, facts: object): Promise<{ answer: string; heard: string }> {
+  if (!hasGemini()) throw new Error("Ask Kanakku needs GEMINI_API_KEY");
+  const prompt = `You are Kanakku, the accounts assistant of a small Kerala grocery shop. The shopkeeper is asking about their business.
+Answer ONLY from the shop data below. If the data can't answer it, say so in one line and suggest what to record.
+
+How to answer:
+- Reply in the same language they used (Malayalam, Manglish or English). Malayalam questions get Malayalam answers.
+- Maximum 4 short lines, like a WhatsApp message. Put the key number first. Use ₹ and Indian number style (₹1,250).
+- Be practical: if something needs action (restock, collect pattu, stop credit to someone), say exactly what to do.
+- Profit numbers are estimates from the latest supplier cost prices; say "about" for profit.
+- Never invent customers, products or numbers.
+
+SHOP DATA (JSON):
+${JSON.stringify(facts)}
+
+${question.audio ? "The question is in the attached voice note." : `QUESTION: """${question.text}"""`}`;
+  return askJSON(prompt, ASK_SCHEMA, question.audio);
 }

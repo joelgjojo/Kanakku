@@ -15,14 +15,20 @@ const toProduct = (r: Row): Product => ({
   aliases: (r.aliases as string[]) ?? [],
   unit: r.unit as Product["unit"],
   price: Number(r.price),
+  costPrice: r.cost_price === null || r.cost_price === undefined ? undefined : Number(r.cost_price),
   stock: Number(r.stock),
   lowStockAt: Number(r.low_stock_at),
   category: r.category as string,
 });
+// cost_price was added after launch. If the column doesn't exist yet, we leave it out
+// (see the ALTER TABLE line in supabase/schema.sql).
+let hasCostColumn = true;
 const fromProduct = (p: Product): Row => ({
   id: p.id, name: p.name, name_ml: p.nameMl, aliases: p.aliases, unit: p.unit,
   price: p.price, stock: p.stock, low_stock_at: p.lowStockAt, category: p.category,
+  ...(hasCostColumn ? { cost_price: p.costPrice ?? null } : {}),
 });
+const missingCost = (e: { message: string } | null) => !!e && /cost_price/.test(e.message);
 
 const toCustomer = (r: Row): Customer => ({
   id: r.id as string,
@@ -101,7 +107,13 @@ export class SupabaseStore implements Store {
 
   private async seed() {
     const s = buildSeed();
-    must(await this.db.from("products").upsert(s.products.map(fromProduct)));
+    let res = await this.db.from("products").upsert(s.products.map(fromProduct));
+    if (missingCost(res.error)) {
+      hasCostColumn = false;
+      console.error("[kanakku] products.cost_price column missing: run the ALTER TABLE line from supabase/schema.sql to save profit data");
+      res = await this.db.from("products").upsert(s.products.map(fromProduct));
+    }
+    must(res);
     must(await this.db.from("customers").upsert(s.customers.map(fromCustomer)));
     for (let i = 0; i < s.bills.length; i += 200) {
       must(await this.db.from("bills").upsert(s.bills.slice(i, i + 200).map((b) => fromBill(b))));
@@ -114,7 +126,12 @@ export class SupabaseStore implements Store {
     return must(await this.db.from("products").select("*").order("category").order("name")).map(toProduct);
   }
   async upsertProduct(p: Product) {
-    must(await this.db.from("products").upsert(fromProduct(p)));
+    let res = await this.db.from("products").upsert(fromProduct(p));
+    if (missingCost(res.error)) {
+      hasCostColumn = false;
+      res = await this.db.from("products").upsert(fromProduct(p));
+    }
+    must(res);
     return p;
   }
   async adjustStock(productId: string, delta: number) {

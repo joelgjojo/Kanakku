@@ -248,8 +248,16 @@ export default function NewBill() {
                   <span className="text-sm text-muted">Customer {mode === "credit" ? "(needed for pattu)" : "(optional)"}</span>
                   <input list="customers" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Name" className={clsx(inputCls, "mt-1")} />
                   <datalist id="customers">{customers.map((c) => <option key={c.customer.id} value={c.customer.name}>{c.customer.nameMl}</option>)}</datalist>
-                  {customerMatch && customerMatch.due > 0 && (
-                    <span className="text-xs text-muted">Pattu already: <b className="text-due num">{rupees(customerMatch.due)}</b></span>
+                  {customerMatch && (customerMatch.due > 0 || mode === "credit") && (
+                    <span className="block text-xs text-muted mt-1">
+                      Pattu already <b className="text-due num">{rupees(Math.max(0, customerMatch.due))}</b>
+                      {" "}· {customerMatch.trust.label} · limit <span className="num">{rupees(customerMatch.trust.limit)}</span>
+                    </span>
+                  )}
+                  {customerMatch && mode === "credit" && customerMatch.due + total > customerMatch.trust.limit && (
+                    <span className="block mt-1 rounded-md bg-due-soft px-2 py-1 text-xs text-due">
+                      This takes {customerMatch.customer.name} to {rupees(customerMatch.due + total)}, over the limit. {customerMatch.trust.reason}
+                    </span>
                   )}
                 </label>
                 <div>

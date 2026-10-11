@@ -55,8 +55,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function buildSeed(now = new Date()): DB {
   const rand = mulberry32(42);
-  const products = SEED_PRODUCTS.map((p) => ({ ...p, aliases: [...p.aliases] }));
-  const created = new Date(now.getTime() - 30 * 86400000).toISOString();
+  // Typical kirana margins by category, so profit numbers look like a real shop.
+  const MARGIN: Record<string, number> = { Grains: 0.12, Grocery: 0.1, Oil: 0.09, Beverages: 0.16, Dairy: 0.07, "Personal care": 0.2, Spices: 0.22, Pulses: 0.13, Vegetables: 0.18, Snacks: 0.2, Household: 0.18 };
+  const products = SEED_PRODUCTS.map((p) => ({
+    ...p,
+    aliases: [...p.aliases],
+    costPrice: Math.round(p.price * (1 - (MARGIN[p.category] ?? 0.12)) * 100) / 100,
+  }));
+  const created = new Date(now.getTime() - 40 * 86400000).toISOString();
   const customers: Customer[] = SEED_CUSTOMERS.map((c) => ({ ...c, createdAt: created }));
 
   // Typical basket sizes per product (qty per line).
@@ -96,7 +102,20 @@ export function buildSeed(now = new Date()): DB {
   const payments: Payment[] = [];
   let number = 1;
 
-  for (let d = 13; d >= 0; d--) {
+  // Customers' payment habits, so the pattu book has reliable and risky people.
+  const habits: Record<string, { every: number; share: number }> = {
+    "c-babu": { every: 2, share: 1 },
+    "c-suma": { every: 4, share: 1 },
+    "c-rajan": { every: 7, share: 0.8 },
+    "c-shaji": { every: 10, share: 0.5 },
+    "c-ammu": { every: 15, share: 0.3 },
+    "c-leela": { every: 999, share: 0 },
+  };
+  const owed = new Map<string, number>();
+  // Who takes pattu most often.
+  const creditPool = ["c-rajan", "c-rajan", "c-leela", "c-leela", "c-leela", "c-suma", "c-babu", "c-babu", "c-shaji", "c-ammu", "c-ammu"];
+
+  for (let d = 27; d >= 0; d--) {
     const day = new Date(now);
     day.setDate(day.getDate() - d);
     // Today: a morning's worth of bills, all before "now" so the demo never looks empty.
@@ -123,7 +142,7 @@ export function buildSeed(now = new Date()): DB {
         items.push({ productId: id, name: p.name, nameMl: p.nameMl, qty, unit: p.unit, price: p.price, total: round2(qty * p.price) });
       }
       const onCredit = rand() < 0.22;
-      const customer = onCredit ? customers[Math.floor(rand() * customers.length)] : null;
+      const customer = onCredit ? customers.find((c) => c.id === creditPool[Math.floor(rand() * creditPool.length)])! : null;
       const sourceRoll = rand();
       bills.push({
         id: `b-seed-${number}`,
@@ -134,17 +153,23 @@ export function buildSeed(now = new Date()): DB {
         items,
         total: round2(items.reduce((s, i) => s + i.total, 0)),
         paymentMode: onCredit ? "credit" : rand() < 0.4 ? "upi" : "cash",
-        source: d > 5 ? "notebook" : sourceRoll < 0.45 ? "voice" : sourceRoll < 0.8 ? "whatsapp" : "manual",
+        source: d > 8 ? "notebook" : sourceRoll < 0.45 ? "voice" : sourceRoll < 0.8 ? "whatsapp" : "manual",
       });
+      if (customer) owed.set(customer.id, (owed.get(customer.id) ?? 0) + items.reduce((s, i) => s + i.total, 0));
       number++;
     }
 
-    // A few customers clear part of their pattu on some days.
-    if (d % 3 === 1) {
-      const c = customers[Math.floor(rand() * customers.length)];
-      const at = new Date(day);
-      at.setHours(18, 30, 0, 0);
-      payments.push({ id: `pay-seed-${d}`, createdAt: at.toISOString(), customerId: c.id, amount: 200 + Math.floor(rand() * 4) * 100, note: "Part payment", source: "manual" });
+    // Evening: customers pay back pattu according to their habits.
+    if (d > 0) {
+      for (const [cid, h] of Object.entries(habits)) {
+        const due = owed.get(cid) ?? 0;
+        if (!h.share || due < 50 || (d + cid.length) % h.every !== 0) continue;
+        const amount = Math.max(50, Math.round((due * h.share) / 10) * 10);
+        const at = new Date(day);
+        at.setHours(18, 15 + Math.floor(rand() * 40), 0, 0);
+        payments.push({ id: `pay-seed-${d}-${cid}`, createdAt: at.toISOString(), customerId: cid, amount, note: "Paid", source: rand() < 0.5 ? "manual" : "whatsapp" });
+        owed.set(cid, due - amount);
+      }
     }
   }
 

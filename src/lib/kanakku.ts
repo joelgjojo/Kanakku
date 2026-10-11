@@ -130,6 +130,14 @@ export async function restock(items: ParsedItem[], source: Source) {
   return done;
 }
 
+export interface Trust {
+  score: number; // 0–100
+  label: "Reliable" | "Watch" | "Risky" | "New";
+  avgDaysToPay: number | null; // how long they usually take to clear a pattu bill
+  limit: number; // suggested pattu limit (₹)
+  reason: string; // one line a shopkeeper understands
+}
+
 export interface Balance {
   customer: Customer;
   credit: number;
@@ -138,6 +146,55 @@ export interface Balance {
   lastActivity: string | null;
   lastPayment: string | null;
   oldestUnpaidDays: number;
+  trust: Trust;
+}
+
+const DAY = 86400000;
+
+/**
+ * Trust score from the customer's own history. Payments clear the oldest pattu first,
+ * so we know how many days each bill took to be paid off.
+ */
+function trustOf(credits: { at: number; amount: number }[], pays: { at: number; amount: number }[], due: number, oldestUnpaidDays: number): Trust {
+  const queue = credits.map((c) => ({ ...c, left: c.amount }));
+  const cleared: { days: number; amount: number }[] = [];
+  let qi = 0;
+  for (const p of pays) {
+    let money = p.amount;
+    while (money > 0.009 && qi < queue.length) {
+      const c = queue[qi];
+      const take = Math.min(money, c.left);
+      c.left -= take;
+      money -= take;
+      if (c.left <= 0.009) {
+        cleared.push({ days: Math.max(0, (p.at - c.at) / DAY), amount: c.amount });
+        qi++;
+      }
+    }
+  }
+  const monthCredit = credits.filter((c) => Date.now() - c.at < 30 * DAY).reduce((s, c) => s + c.amount, 0);
+  const totalCleared = cleared.reduce((s, c) => s + c.amount, 0);
+  const avgDaysToPay = totalCleared ? cleared.reduce((s, c) => s + c.days * c.amount, 0) / totalCleared : null;
+
+  if (credits.length < 3 && !pays.length) {
+    return { score: 60, label: "New", avgDaysToPay: null, limit: 1000, reason: "New on pattu. Start with a small limit." };
+  }
+  let score = 100;
+  if (avgDaysToPay !== null) score -= Math.min(40, Math.max(0, (avgDaysToPay - 5) * 2.5));
+  else score -= 40; // has pattu but has never paid anything back
+  score -= Math.min(35, Math.max(0, (oldestUnpaidDays - 10) * 2));
+  if (monthCredit > 0 && due > monthCredit * 2) score -= 10; // balance keeps growing
+  score = Math.round(Math.max(5, Math.min(100, score)));
+
+  const label: Trust["label"] = score >= 75 ? "Reliable" : score >= 50 ? "Watch" : "Risky";
+  const base = Math.max(1000, monthCredit * 0.6);
+  const limit = Math.max(500, Math.ceil((base * (0.4 + score / 100)) / 250) * 250);
+  const reason =
+    avgDaysToPay === null
+      ? "Has taken pattu but hasn't paid any back yet."
+      : `Usually pays in ${Math.max(1, Math.round(avgDaysToPay))} day${Math.round(avgDaysToPay) > 1 ? "s" : ""}` +
+        (oldestUnpaidDays > 14 ? `, but has a bill unpaid for ${oldestUnpaidDays} days.` : ".");
+  return { score, label, avgDaysToPay: avgDaysToPay === null ? null : Math.round(avgDaysToPay * 10) / 10, limit, reason };
 }
 
 export async function balances(): Promise<Balance[]> {
@@ -145,27 +202,35 @@ export async function balances(): Promise<Balance[]> {
   const [customers, bills, payments] = await Promise.all([store.listCustomers(), store.listBills(), store.listPayments()]);
   return customers
     .map((customer) => {
-      const cb = bills.filter((b) => b.customerId === customer.id && b.paymentMode === "credit");
-      const cp = payments.filter((p) => p.customerId === customer.id);
+      const cb = bills.filter((b) => b.customerId === customer.id && b.paymentMode === "credit").sort((a, c) => a.createdAt.localeCompare(c.createdAt));
+      const cp = payments.filter((p) => p.customerId === customer.id).sort((a, c) => a.createdAt.localeCompare(c.createdAt));
       const credit = cb.reduce((s, b) => s + b.total, 0);
       const paid = cp.reduce((s, p) => s + p.amount, 0);
       const dates = [...cb.map((b) => b.createdAt), ...cp.map((p) => p.createdAt)].sort();
-      const lastPayment = cp.map((p) => p.createdAt).sort().at(-1) ?? null;
+      const lastPayment = cp.at(-1)?.createdAt ?? null;
       // Walk credits oldest-first, paying them off, to find the oldest bill still unpaid.
       let left = paid;
       let oldest: string | null = null;
-      for (const b of [...cb].sort((a, c) => a.createdAt.localeCompare(c.createdAt))) {
+      for (const b of cb) {
         if (left >= b.total) left -= b.total;
         else { oldest = b.createdAt; break; }
       }
+      const oldestUnpaidDays = oldest ? Math.floor((Date.now() - new Date(oldest).getTime()) / DAY) : 0;
+      const due = round2(credit - paid);
       return {
         customer,
         credit: round2(credit),
         paid: round2(paid),
-        due: round2(credit - paid),
+        due,
         lastActivity: dates.at(-1) ?? null,
         lastPayment,
-        oldestUnpaidDays: oldest ? Math.floor((Date.now() - new Date(oldest).getTime()) / 86400000) : 0,
+        oldestUnpaidDays,
+        trust: trustOf(
+          cb.map((b) => ({ at: new Date(b.createdAt).getTime(), amount: b.total })),
+          cp.map((p) => ({ at: new Date(p.createdAt).getTime(), amount: p.amount })),
+          due,
+          oldestUnpaidDays,
+        ),
       };
     })
     .sort((a, b) => b.due - a.due);
@@ -173,4 +238,90 @@ export async function balances(): Promise<Balance[]> {
 
 export async function customerDue(customerId: string) {
   return (await balances()).find((b) => b.customer.id === customerId)?.due ?? 0;
+}
+
+export interface LedgerEntry {
+  id: string;
+  at: string;
+  kind: "credit" | "payment";
+  amount: number;
+  source: Source;
+  text: string;
+}
+
+/** One customer's pattu page: balance, trust and every credit bill and payment, oldest first. */
+export async function customerLedger(customerId: string) {
+  const store = getStore();
+  const bal = (await balances()).find((b) => b.customer.id === customerId);
+  if (!bal) return null;
+  const [bills, payments] = await Promise.all([store.listBills(), store.listPayments()]);
+  const entries: LedgerEntry[] = [
+    ...bills
+      .filter((b) => b.customerId === customerId && b.paymentMode === "credit")
+      .map((b) => ({
+        id: b.id,
+        at: b.createdAt,
+        kind: "credit" as const,
+        amount: b.total,
+        source: b.source,
+        text: b.items.map((i) => `${i.nameMl ?? i.name} ${i.qty}${i.unit === "pc" ? "" : " " + i.unit}`).join(", "),
+      })),
+    ...payments
+      .filter((p) => p.customerId === customerId)
+      .map((p) => ({ id: p.id, at: p.createdAt, kind: "payment" as const, amount: p.amount, source: p.source, text: p.note ?? "Paid" })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  return { ...bal, entries };
+}
+
+export interface PurchaseOutcome {
+  product: Product;
+  qty: number;
+  unitCost: number;
+  isNew: boolean;
+  oldCost: number | null;
+  marginPct: number;
+}
+
+/**
+ * Stock arrived on a supplier bill: add the stock, remember what we paid (for profit),
+ * and create any item the shop didn't stock before (priced at cost + 15%).
+ */
+export async function importPurchase(
+  lines: { productId: string | null; name: string; nameMl?: string | null; qty: number; unit: Product["unit"]; unitCost: number }[],
+  source: Source,
+): Promise<PurchaseOutcome[]> {
+  const store = getStore();
+  const products = await store.listProducts();
+  const out: PurchaseOutcome[] = [];
+  for (const l of lines) {
+    if (!(l.qty > 0) || !(l.unitCost > 0)) continue;
+    let p = (l.productId && products.find((x) => x.id === l.productId)) || findProduct(products, l.name) || null;
+    const unitCost = Math.round(l.unitCost * 100) / 100;
+    if (!p) {
+      const created: Product = {
+        id: uid("p"),
+        name: l.name.trim(),
+        nameMl: l.nameMl?.trim() || "",
+        aliases: [],
+        unit: l.unit,
+        price: Math.ceil(unitCost * 1.15),
+        costPrice: unitCost,
+        stock: 0,
+        lowStockAt: Math.max(1, Math.round(l.qty / 4)),
+        category: "New",
+      };
+      await store.upsertProduct(created);
+      products.push(created);
+      p = created;
+      out.push({ product: { ...created, stock: l.qty }, qty: l.qty, unitCost, isNew: true, oldCost: null, marginPct: Math.round(((created.price - unitCost) / created.price) * 1000) / 10 });
+    } else {
+      const oldCost = p.costPrice ?? null;
+      p = { ...p, costPrice: unitCost };
+      await store.upsertProduct(p);
+      out.push({ product: { ...p, stock: p.stock + l.qty }, qty: l.qty, unitCost, isNew: false, oldCost, marginPct: Math.round(((p.price - unitCost) / p.price) * 1000) / 10 });
+    }
+    await store.adjustStock(p.id, l.qty);
+    await store.insertStockMove({ id: uid("sm"), createdAt: new Date().toISOString(), productId: p.id, qty: l.qty, reason: "restock", source });
+  }
+  return out;
 }

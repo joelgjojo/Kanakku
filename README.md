@@ -19,6 +19,12 @@ Problem statement: **Small Business and Local Commerce, #1: Manual billing and s
 | **Pattu (credit) book** | Sees who owes what and for how long, records payments, sends a polite Malayalam reminder. | `/pattu` |
 | **Stock and restock forecast** | Sees what runs out in the next few days, sends the supplier an order in one tap. | `/stock`, `/` |
 | **Shelf check** | Photographs a shelf. Kanakku counts it and flags gaps against the records (unbilled sales, theft, damage). | `/shelf` |
+| **Customer pattu page + UPI pay** | Each customer gets a private link showing their own pattu account with a "Pay ₹X with UPI" button and QR. Reminders include it. | `/k/<code>`, `/pattu` |
+| **Trust score & credit limit** | Every pattu customer is scored from their real repayment history (how fast they pay, oldest unpaid bill) with a suggested limit. Billing past the limit warns the shopkeeper, in the app and on WhatsApp. | `/pattu`, `/bill` |
+| **Supplier bill → real profit** | Photograph the wholesaler's bill. Stock is added, cost prices are learned, and profit per item and per day appears. Warns when a margin is too thin or a supplier raised a price. | `/purchase`, WhatsApp photo with caption "bill" |
+| **Ask Kanakku** | Ask anything about the shop by typing or voice, in Malayalam or English: "ഈ ആഴ്ച ലാഭം എത്ര?", "who should I stop giving pattu to?". Answers come from the shop's own numbers. | Today page, WhatsApp |
+| **Close the day** | Count the cash drawer; Kanakku says if it's short or extra, and by how much. | Today page |
+| **Loan-ready report** | A printable 4-week business summary (sales, consistency, growth, margin, collection rate) a bank officer can read for a MUDRA loan. Small shops usually have no records to show. | `/report` |
 | **Works offline** | No internet: typed bills still parse (rule-based Malayalam/Manglish parser), and saved bills queue on the phone until the connection is back. | everywhere |
 
 The bot also understands:
@@ -74,6 +80,18 @@ Without Supabase, data is saved to `.data/kanakku.json` on your laptop. That's f
 5. Restart `npm run dev`. The sidebar should say **Saved to Supabase**.
 
 The service_role key can read and write everything. Keep it only in `.env.local` and in Vercel's environment variables. Never put it in the code or in a chat.
+
+### Updating an existing Supabase database
+
+If your Supabase tables were created before cost prices existed, run this once in **SQL Editor**:
+
+```sql
+alter table products add column if not exists cost_price numeric;
+```
+
+Then **Stock → Reset to the starting demo** to load demo data with cost prices and realistic pattu habits.
+
+For the UPI pay button, set `NEXT_PUBLIC_UPI_ID` (for example `yourname@okaxis`) in `.env.local` and in Vercel. Payments go straight to that UPI ID, so use one your team controls.
 
 ### Before going on stage
 

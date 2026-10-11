@@ -107,6 +107,57 @@ await check("Dashboard has today's bills", async () => {
   return `today ₹${d.today.sales} from ${d.today.bills} bills · ${d.restock.length} items to restock · pattu ₹${d.pattu.total}`;
 });
 
+await check("Pattu trust scores and limits", async () => {
+  const list = await json("/api/customers");
+  assert(list.every((b: any) => b.trust && typeof b.trust.score === "number" && b.trust.limit > 0), "trust missing");
+  const risky = list.filter((b: any) => b.trust.label === "Risky" || b.trust.label === "Watch").map((b: any) => b.customer.name);
+  return `${list.length} customers scored · watch/risky: ${risky.join(", ") || "none"}`;
+});
+
+let customerUrl = "";
+await check("Customer pattu page (shareable link)", async () => {
+  const c = await json("/api/customers/c-rajan");
+  assert(c.link?.includes("/k/"), "no link");
+  customerUrl = BASE + new URL(c.link).pathname;
+  const res = await fetch(customerUrl);
+  const html = await res.text();
+  assert(res.ok && /pattu/i.test(html), `${res.status}`);
+  return `${customerUrl}${c.upi ? " · UPI pay ready" : " · set NEXT_PUBLIC_UPI_ID for the pay button"}`;
+});
+
+await check("Supplier bill import (stock + cost price)", async () => {
+  const before = (await json("/api/products")).products.find((p: any) => p.id === "p-tea");
+  const r = await json("/api/purchase/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: [{ productId: "p-tea", name: "Tea powder", qty: 10, unit: "pkt", unitCost: 54 }] }),
+  });
+  const after = (await json("/api/products")).products.find((p: any) => p.id === "p-tea");
+  assert(Math.abs(after.stock - before.stock - 10) < 0.001, `stock ${before.stock} → ${after.stock}`);
+  const d = r.done[0];
+  return `tea +10 pkt at ₹54 → ${d.marginPct}% margin${after.costPrice === 54 ? "" : " (cost not saved: run the ALTER TABLE line in supabase/schema.sql)"}`;
+});
+
+await check("Profit on the dashboard", async () => {
+  const d = await json("/api/dashboard");
+  assert("profit" in d.today && "week" in d, "no profit fields");
+  return d.today.margin === null ? "no cost prices yet (reset demo or scan a supplier bill)" : `today ~₹${d.today.profit} profit (${d.today.margin}%) · week ${d.week.margin}%`;
+});
+
+await check("Loan report page", async () => {
+  const res = await fetch(`${BASE}/report`);
+  const html = await res.text();
+  assert(res.ok && /Collection rate/.test(html), `${res.status}`);
+  return "renders";
+});
+
+await check("Ask Kanakku (AI answer from shop data)", async () => {
+  if (status.ai !== "gemini") return "skipped: needs GEMINI_API_KEY on the server";
+  const r = await json("/api/ask", form({ question: "Which item made the most profit this week?" }));
+  assert(r.answer?.length > 5, "empty answer");
+  return r.answer.split("\n")[0].slice(0, 100);
+});
+
 await check("WhatsApp webhook answers like Twilio expects", async () => {
   const params = new URLSearchParams({ Body: "innathe kanakku", From: "whatsapp:+910000000000", To: "whatsapp:+14155238886", NumMedia: "0" });
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };

@@ -1,8 +1,9 @@
 // The WhatsApp brain. Used by the Twilio webhook and the in-app simulator.
-import { parseMessage, readNotebook, auditShelf } from "./ai";
+import { askShop, auditShelf, parseMessage, readNotebook, readPurchaseBill } from "./ai";
 import type { Media } from "./ai/gemini";
-import { balances, createBill, customerDue, recordPayment, restock, toBillItems } from "./kanakku";
-import { dashboard, forecast } from "./analytics";
+import { balances, createBill, customerDue, importPurchase, recordPayment, restock, toBillItems } from "./kanakku";
+import { customerLink } from "./links";
+import { dashboard, forecast, shopFacts } from "./analytics";
 import { getStore } from "./store";
 import { qtyLabel, rupees } from "./format";
 import type { Bill, ParsedMessage, Source } from "./types";
@@ -21,6 +22,8 @@ Send me:
 💰 "Suma 300 thannu" to record a payment
 🚚 "50 kilo ari vannu" when stock arrives
 📒 a photo of your notebook page to import it
+🧾 a supplier bill photo with caption "bill" to add stock and track profit
+❓ any question: "ee aazhcha laabham etra?"
 🗄️ a shelf photo with caption "shelf" to check stock
 Ask: "stock", "pattu", "innathe kanakku"`;
 
@@ -48,6 +51,17 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
 
     // Photos: notebook page by default, shelf audit if the caption says so.
     if (input.media?.mimeType.startsWith("image/")) {
+      if (/\b(bill|invoice|supplier|purchase|wholesale)\b|ബിൽ|ഇൻവോയ്സ്|വാങ്ങി/i.test(lower)) {
+        const res = await readPurchaseBill(input.media, products);
+        const done = await importPurchase(res.items, "whatsapp");
+        if (!done.length) return { kind: "error", reply: "Couldn't read items on that bill. Try a clearer, straight photo." };
+        const lines = done.map((d) => `• ${d.product.nameMl || d.product.name} +${qtyLabel(d.qty, d.product.unit)} @ ${rupees(d.unitCost)}${d.isNew ? " 🆕" : ""} → margin ${d.marginPct}%${d.marginPct < 5 ? " ⚠️" : ""}`);
+        const low = done.filter((d) => d.marginPct < 5);
+        return {
+          kind: "restock",
+          reply: `🧾 Supplier bill${res.supplier ? ` from ${res.supplier}` : ""} added\n${lines.join("\n")}${res.invoiceTotal ? `\nBill total: ${rupees(res.invoiceTotal)}` : ""}${low.length ? `\n\n⚠️ Very low margin on ${low.map((d) => d.product.name).join(", ")}. Check your selling price.` : ""}`,
+        };
+      }
       if (/shelf|ഷെൽഫ്|rack|audit/i.test(lower)) {
         const res = await auditShelf(input.media, products);
         const rows = res.items.map((c) => {
@@ -103,10 +117,15 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
           return { kind: "error", parsed, reply: `Whose pattu? Say the name too, like "Rajan pattu".` };
         }
         const bill = await createBill({ items, customerName: parsed.customerName, paymentMode: parsed.paymentMode, source, rawInput: parsed.transcript });
-        const due = bill.customerId && bill.paymentMode === "credit" ? await customerDue(bill.customerId) : undefined;
+        const bal = bill.customerId && bill.paymentMode === "credit" ? (await balances()).find((b) => b.customer.id === bill.customerId) : undefined;
+        const due = bal?.due;
         const low = forecast(await store.listProducts(), await store.listBills(14))
           .filter((f) => bill.items.some((i) => i.productId === f.product.id) && (f.status === "critical" || f.status === "out"));
         let reply = `🎤 "${parsed.transcript}"\n\n${formatBill(bill, due)}`;
+        if (bal && bal.due > bal.trust.limit) {
+          reply += `\n\n🛑 ${bal.customer.name} is over the pattu limit (${rupees(bal.trust.limit)}). ${bal.trust.reason}`;
+        }
+        if (bal) reply += `\nSend ${bal.customer.name} their pattu page: ${customerLink(bal.customer.id)}`;
         if (low.length) reply += `\n\n⚠️ Running low: ${low.map((f) => `${f.product.nameMl} (${f.product.stock} ${f.product.unit} left)`).join(", ")}`;
         return { kind: "bill", bill, parsed, reply };
       }
@@ -114,7 +133,11 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
         if (!parsed.amount) return { kind: "error", parsed, reply: "How much was paid? Try: \"Suma 300 thannu\"." };
         const { customer } = await recordPayment(parsed.customerName, parsed.amount, source);
         const due = await customerDue(customer.id);
-        return { kind: "payment", parsed, reply: `💰 ${customer.name} paid ${rupees(parsed.amount)}.\nബാക്കി / Balance pattu: *${rupees(due)}*` };
+        return {
+          kind: "payment",
+          parsed,
+          reply: `💰 ${customer.name} paid ${rupees(parsed.amount)}.\nബാക്കി / Balance pattu: *${rupees(due)}*${due > 0 ? `\nTheir page: ${customerLink(customer.id)}` : " ✅"}`,
+        };
       }
       case "restock": {
         const done = await restock(parsed.items, source);
@@ -142,6 +165,10 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
           kind: "info", parsed,
           reply: `📊 ഇന്നത്തെ കണക്ക് / Today\nSales: *${rupees(d.today.sales)}* from ${d.today.bills} bill${d.today.bills === 1 ? "" : "s"}\nPattu given: ${rupees(d.today.creditGiven)}\nPattu collected: ${rupees(d.today.collected)}\nTop seller this week: ${d.top[0]?.nameMl ?? d.top[0]?.name ?? "-"}`,
         };
+      }
+      case "question": {
+        const a = await askShop({ text: parsed.transcript || text }, await shopFacts());
+        return { kind: "info", parsed, reply: `🤔 ${a.answer}` };
       }
       default:
         return { kind: "error", parsed, reply: `Sorry, I didn't get that${parsed.transcript ? `: "${parsed.transcript}"` : ""}.\n\n${HELP}` };

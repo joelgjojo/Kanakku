@@ -10,8 +10,11 @@ create table if not exists products (
   price         numeric not null default 0,
   stock         numeric not null default 0,
   low_stock_at  numeric not null default 0,
-  category      text not null default 'Other'
+  category      text not null default 'Other',
+  cost_price    numeric
 );
+-- For databases created before cost prices existed:
+alter table products add column if not exists cost_price numeric;
 
 create table if not exists customers (
   id          text primary key,

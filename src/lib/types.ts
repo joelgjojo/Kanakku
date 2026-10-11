@@ -7,6 +7,7 @@ export interface Product {
   aliases: string[]; // extra spellings: manglish, brand names, etc.
   unit: Unit;
   price: number; // selling price per unit (₹)
+  costPrice?: number; // what the shop pays the supplier per unit (₹), from supplier bills
   stock: number; // current stock in `unit`
   lowStockAt: number; // alert threshold
   category: string;
@@ -74,6 +75,7 @@ export type Intent =
   | "stock_query"
   | "credit_query"
   | "summary"
+  | "question"
   | "unknown";
 
 export interface ParsedItem {
@@ -117,6 +119,23 @@ export interface ShelfCount {
   counted: number;
   unit: Unit;
   confidence: number;
+}
+
+export interface PurchaseLine {
+  productId: string | null;
+  name: string;
+  nameMl?: string | null;
+  qty: number; // in the catalogue unit
+  unit: Unit;
+  unitCost: number; // ₹ per catalogue unit
+  total: number;
+}
+
+export interface PurchaseResult {
+  supplier: string | null;
+  invoiceDate: string | null;
+  items: PurchaseLine[];
+  invoiceTotal: number | null;
 }
 
 export interface ShelfResult {

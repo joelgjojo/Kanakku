@@ -1,8 +1,8 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { Bell, Phone, Plus, Wallet } from "lucide-react";
+import { Bell, Link2, Phone, Plus, QrCode, ShieldAlert, Wallet } from "lucide-react";
 import { api, waLink } from "@/lib/client";
 import { rupees } from "@/lib/format";
 import type { Balance } from "@/lib/kanakku";
@@ -10,7 +10,22 @@ import type { Source } from "@/lib/types";
 import { Button, ErrorNote, Money, PageHeader, SourceIcon, Spinner, inputCls } from "@/components/ui";
 
 interface Entry { id: string; at: string; kind: "credit" | "payment"; amount: number; source: Source; text: string }
-type Detail = Balance & { entries: Entry[] };
+type Detail = Balance & { entries: Entry[]; link: string; upi: string | null };
+
+const TRUST_CLS: Record<Balance["trust"]["label"], string> = {
+  Reliable: "bg-leaf-soft text-leaf",
+  Watch: "bg-warn-soft text-warn",
+  Risky: "bg-due-soft text-due",
+  New: "bg-wall text-muted",
+};
+
+function TrustBadge({ t }: { t: Balance["trust"] }) {
+  return (
+    <span title={t.reason} className={clsx("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold", TRUST_CLS[t.label])}>
+      {t.label} <span className="num font-normal opacity-80">{t.score}</span>
+    </span>
+  );
+}
 
 const SHOP = process.env.NEXT_PUBLIC_SHOP_NAME ?? "Ammu Stores";
 const UPI = process.env.NEXT_PUBLIC_UPI_ID;
@@ -64,8 +79,9 @@ function Pattu() {
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="block font-semibold truncate">{b.customer.nameMl ?? b.customer.name} <span className="font-normal text-sm text-muted">{b.customer.nameMl ? b.customer.name : ""}</span></span>
-                        <span className={clsx("block text-sm", b.oldestUnpaidDays > 7 ? "text-warn" : "text-muted")}>
-                          {b.due <= 0 ? "All clear" : b.oldestUnpaidDays > 0 ? `Oldest unpaid: ${b.oldestUnpaidDays} days` : "Since today"}
+                        <span className={clsx("flex items-center gap-2 text-sm", b.oldestUnpaidDays > 7 ? "text-warn" : "text-muted")}>
+                          <TrustBadge t={b.trust} />
+                          <span className="truncate">{b.due <= 0 ? "All clear" : b.oldestUnpaidDays > 0 ? `unpaid ${b.oldestUnpaidDays} days` : "since today"}</span>
                         </span>
                       </span>
                       <Money value={Math.max(0, b.due)} className={clsx("font-semibold", b.due > 0 ? "text-due" : "text-leaf")} />
@@ -102,6 +118,9 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [paid, setPaid] = useState<number | null>(null);
+  const ledgerRef = useRef<HTMLOListElement>(null);
+  // Open at the newest entries, like turning to the last page of the book.
+  useEffect(() => { if (ledgerRef.current) ledgerRef.current.scrollTop = ledgerRef.current.scrollHeight; }, [d.entries.length, d.customer.id]);
 
   useEffect(() => { setPhone(d.customer.phone ?? ""); setPaid(null); setAmount(""); }, [d.customer.id, d.customer.phone]);
 
@@ -123,7 +142,8 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
   };
 
   const nameMl = d.customer.nameMl ?? d.customer.name;
-  const reminder = `നമസ്കാരം ${nameMl}, ${SHOP}-ൽ നിങ്ങളുടെ പറ്റ് ബാക്കി ${rupees(d.due)} ആണ്. സൗകര്യം പോലെ അടയ്ക്കാമോ?${UPI ? `\nUPI: ${UPI}` : ""}\n\nHi ${d.customer.name}, your pending balance at ${SHOP} is ${rupees(d.due)}. Please pay when convenient. Nanni 🙏`;
+  const reminder = `നമസ്കാരം ${nameMl}, ${SHOP}-ൽ നിങ്ങളുടെ പറ്റ് ബാക്കി ${rupees(d.due)} ആണ്. സൗകര്യം പോലെ അടയ്ക്കാമോ?\nനിങ്ങളുടെ കണക്ക് കാണാനും UPI വഴി അടയ്ക്കാനും: ${d.link}${UPI ? `\nUPI: ${UPI}` : ""}\n\nHi ${d.customer.name}, your pending balance at ${SHOP} is ${rupees(d.due)}. See your account and pay here: ${d.link}\nNanni 🙏`;
+  const overLimit = d.due > d.trust.limit;
 
   // Running balance down the page, like the shopkeeper's own book.
   let running = 0;
@@ -139,12 +159,23 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
           <div>
             <h2 className="sign text-3xl">{nameMl}</h2>
             {d.customer.nameMl && <p className="text-muted">{d.customer.name}</p>}
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <TrustBadge t={d.trust} />
+              <span className="text-muted">{d.trust.reason}</span>
+            </p>
+            <p className="text-sm text-muted mt-0.5">Suggested pattu limit <b className="num text-ink">{rupees(d.trust.limit)}</b></p>
           </div>
           <div className="text-right">
             <p className="text-sm text-muted">{d.due > 0 ? "Owes you" : "Balance"}</p>
             <p className={clsx("sign num text-4xl", d.due > 0 ? "text-due" : "text-leaf")}>{rupees(Math.max(0, d.due))}</p>
           </div>
         </div>
+        {overLimit && (
+          <p className="mt-3 flex items-start gap-2 rounded-lg bg-due-soft px-3 py-2 text-sm text-due">
+            <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+            Over the suggested limit by {rupees(d.due - d.trust.limit)}. Collect some before giving more pattu.
+          </p>
+        )}
         {paid !== null && <p className="mt-3 rounded-lg bg-leaf-soft px-3 py-2 text-sm text-leaf font-semibold slip-in">Payment of {rupees(paid)} added.</p>}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <form onSubmit={pay} className="flex gap-2">
@@ -168,15 +199,21 @@ function CustomerPage({ d, onChange }: { d: Detail; onChange: () => void }) {
             </a>
           </div>
         </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <PayQr upi={d.upi} due={d.due} />
+          <a href={d.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 h-9 rounded-lg border border-line px-3 text-sm font-semibold hover:bg-wall">
+            <Link2 size={15} /> {d.customer.name}&apos;s page
+          </a>
+        </div>
         <ErrorNote>{err}</ErrorNote>
-        <p className="mt-3 text-xs text-muted">Reminders open in WhatsApp with the message ready. Nothing goes out until you press send.</p>
+        <p className="mt-3 text-xs text-muted">Reminders open in WhatsApp with the message and {d.customer.name}&apos;s own pattu page link ready. Nothing goes out until you press send.</p>
       </div>
 
       <div className="panel overflow-hidden">
         <div className="grid grid-cols-[2.75rem_3.75rem_1fr_4.75rem_5rem] items-end px-0 pr-4 pt-3 pb-1 text-xs text-muted border-b border-line">
           <span /><span className="pl-2">Date</span><span>Entry</span><span className="text-right">Amount</span><span className="text-right">Balance</span>
         </div>
-        <ol className="ledger max-h-[32rem] overflow-y-auto">
+        <ol ref={ledgerRef} className="ledger max-h-[32rem] overflow-y-auto">
           {rows.length === 0 && <li className="ledger-row pl-14 text-faint">No entries yet.</li>}
           {rows.map((r) => (
             <li key={r.id} className="ledger-row grid grid-cols-[2.75rem_3.75rem_1fr_4.75rem_5rem] pr-4 text-[0.92rem]">
@@ -220,5 +257,38 @@ function AddCustomer({ onAdded }: { onAdded: () => void }) {
       <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="WhatsApp number with 91" inputMode="tel" className={inputCls} />
       <div className="flex gap-2"><Button type="submit" busy={busy}>Add customer</Button><Button type="button" variant="quiet" onClick={() => setOpen(false)}>Cancel</Button></div>
     </form>
+  );
+}
+
+/** Show a UPI QR on screen so the customer can pay the exact due right at the counter. */
+function PayQr({ upi, due }: { upi: string | null; due: number }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); setSvg(null); }, [upi]);
+  if (due <= 0) return null;
+  if (!upi) {
+    return <span className="inline-flex items-center gap-2 h-9 px-1 text-xs text-muted"><QrCode size={15} />Add NEXT_PUBLIC_UPI_ID to show a pay QR</span>;
+  }
+  return (
+    <>
+      <button
+        onClick={async () => {
+          if (!svg) {
+            const QR = (await import("qrcode")).default;
+            setSvg(await QR.toString(upi, { type: "svg", margin: 1, color: { dark: "#18202e", light: "#fcfcfb" } }));
+          }
+          setOpen((o) => !o);
+        }}
+        className="inline-flex items-center gap-2 h-9 rounded-lg bg-ink text-paper px-3 text-sm font-semibold"
+      >
+        <QrCode size={15} /> {open ? "Hide QR" : `Scan to pay ${rupees(due)}`}
+      </button>
+      {open && svg && (
+        <div className="w-full flex flex-col items-center gap-1 py-3 slip-in">
+          <div className="w-56" dangerouslySetInnerHTML={{ __html: svg }} />
+          <p className="text-sm text-muted">Any UPI app. Amount is filled in: <b className="num text-ink">{rupees(due)}</b></p>
+        </div>
+      )}
+    </>
   );
 }

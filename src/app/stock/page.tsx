@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
-import { Plus, RotateCcw, ScanSearch, Truck } from "lucide-react";
+import { Plus, Receipt, RotateCcw, ScanSearch, Truck } from "lucide-react";
 import { api, waLink } from "@/lib/client";
 import { qtyLabel, rupees, unitLabel } from "@/lib/format";
 import type { Forecast } from "@/lib/analytics";
@@ -38,6 +38,7 @@ export default function Stock() {
   return (
     <>
       <PageHeader title="Stock" ml="സ്റ്റോക്ക്">
+        <Link href="/purchase" className="inline-flex items-center gap-2 h-10 rounded-lg border border-line bg-paper px-3 text-sm font-semibold hover:bg-wall"><Receipt size={16} />Supplier bill</Link>
         <Link href="/shelf" className="inline-flex items-center gap-2 h-10 rounded-lg border border-line bg-paper px-3 text-sm font-semibold hover:bg-wall"><ScanSearch size={16} />Check a shelf</Link>
         <Button onClick={() => setAdding((a) => !a)}><Plus size={16} />Add item</Button>
       </PageHeader>
@@ -62,19 +63,22 @@ export default function Stock() {
           {!rows ? <div className="p-5"><Spinner /></div> : (
             <>
               <div className="hidden md:grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_1fr_6rem] gap-3 px-5 py-2.5 text-xs text-muted border-b border-line">
-                <span>Item</span><span className="text-right">In stock</span><span className="text-right">Sells a day</span><span className="text-right">Lasts</span><span>Status</span><span />
+                <span>Item</span><span className="text-right">In stock</span><span className="text-right">Sells a day</span><span className="text-right">Lasts</span><span className="text-right">Margin</span><span>Status</span><span />
               </div>
               <ul className="divide-y divide-line">
                 {shown.map((f) => (
                   <li key={f.product.id}>
-                    <div className="grid grid-cols-[1fr_auto] md:grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_1fr_6rem] items-center gap-x-3 gap-y-1 px-5 py-3">
+                    <div className="grid grid-cols-[1fr_auto] md:grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.7fr_1fr_6rem] items-center gap-x-3 gap-y-1 px-5 py-3">
                       <div className="min-w-0">
                         <p className="font-semibold truncate">{f.product.nameMl} <span className="font-normal text-sm text-muted">{f.product.name}</span></p>
-                        <p className="text-xs text-muted num">{rupees(f.product.price)} per {unitLabel[f.product.unit]} · {f.product.category}</p>
+                        <p className="text-xs text-muted num">{rupees(f.product.price)} per {unitLabel[f.product.unit]}{f.product.costPrice ? ` · cost ${rupees(f.product.costPrice)}` : ""} · {f.product.category}</p>
                       </div>
                       <p className="num text-right font-semibold">{qtyLabel(f.product.stock, f.product.unit)}</p>
                       <p className="num text-right text-muted hidden md:block">{f.perDay ? `${f.perDay} ${unitLabel[f.product.unit]}` : "-"}</p>
                       <p className="num text-right hidden md:block">{f.daysLeft === null ? "-" : f.daysLeft >= 30 ? "30+ days" : `${f.daysLeft} days`}</p>
+                      <p className={clsx("num text-right hidden md:block", f.margin === null ? "text-faint" : f.margin < 5 ? "text-due font-semibold" : "text-leaf")} title={f.product.costPrice ? `Cost ${rupees(f.product.costPrice)}` : "Scan a supplier bill to learn the cost"}>
+                        {f.margin === null ? "-" : `${f.margin}%`}
+                      </p>
                       <p className="col-span-2 md:col-span-1 flex items-center gap-2">
                         <span className={clsx("rounded-md px-2 py-0.5 text-xs font-semibold", STATUS[f.status].cls)}>{STATUS[f.status].label}</span>
                         <span className="md:hidden text-xs text-muted num">{f.daysLeft !== null && f.daysLeft < 30 ? `lasts ${f.daysLeft} days` : ""}</span>
