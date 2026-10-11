@@ -62,7 +62,7 @@ export default function Stock() {
         <section className="panel overflow-hidden">
           {!rows ? <div className="p-5"><Spinner /></div> : (
             <>
-              <div className="hidden md:grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_1fr_6rem] gap-3 px-5 py-2.5 text-xs text-muted border-b border-line">
+              <div className="hidden md:grid grid-cols-[1.6fr_0.8fr_0.8fr_0.8fr_0.7fr_1fr_6rem] gap-3 px-5 py-2.5 text-xs text-muted border-b border-line">
                 <span>Item</span><span className="text-right">In stock</span><span className="text-right">Sells a day</span><span className="text-right">Lasts</span><span className="text-right">Margin</span><span>Status</span><span />
               </div>
               <ul className="divide-y divide-line">
