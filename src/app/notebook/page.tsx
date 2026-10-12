@@ -20,7 +20,7 @@ export default function Notebook() {
   const [raw, setRaw] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState<{ sales: number; payments: number; total: number } | null>(null);
+  const [done, setDone] = useState<{ sales: number; payments: number; total: number; newItems?: string[] } | null>(null);
 
   const pick = async (f: File | undefined) => {
     if (!f) return;
@@ -81,6 +81,9 @@ export default function Notebook() {
           {done && (
             <div className="rounded-lg bg-leaf-soft p-4 text-leaf slip-in">
               <p className="font-semibold flex items-center gap-2"><Check size={18} />{ml ? `${done.sales} വിൽപ്പന (${rupees(done.total)}), ${done.payments} പറ്റ് അടവ് ചേർത്തു.` : `Added ${done.sales} sales (${rupees(done.total)}) and ${done.payments} payments.`}</p>
+              {done.newItems && done.newItems.length > 0 && (
+                <p className="text-sm mt-1 text-ink">🆕 {t("New in your stock list:", "സ്റ്റോക്ക് ലിസ്റ്റിൽ പുതിയത്:")} {done.newItems.join(", ")}</p>
+              )}
               <p className="text-sm mt-1 text-ink">See them on <Link className="underline" href="/">Today</Link> and in the <Link className="underline" href="/pattu">Pattu book</Link>.</p>
             </div>
           )}

@@ -120,12 +120,12 @@ export async function createBill(input: NewBill): Promise<SavedBill> {
   if (!customer) customer = await resolveCustomer(input.customerName);
   if (input.paymentMode === "credit" && !customer) throw new Error("Pattu needs a customer name");
 
-  // Items not in the stock list yet get added (not from notebook pages, whose odd lines stay as written).
+  // Items not in the stock list yet get added (a notebook line that's only a total stays as written).
   const added: Product[] = [];
   const items: BillItem[] = [];
   for (const raw of input.items) {
     const i = { ...raw, total: round2(raw.qty * raw.price) };
-    if (!i.productId && input.source !== "notebook" && isSaneNewItem(i)) {
+    if (!i.productId && !i.asWritten && isSaneNewItem(i)) {
       // It was in the shop to be sold, so it starts with that much stock, and ends this bill at zero.
       const { product: p, created } = await addNewProduct({ name: i.name, nameMl: i.nameMl, unit: i.unit, price: i.price, stock: input.affectStock === false ? 0 : i.qty });
       if (created && !added.some((a) => a.id === p.id)) added.push({ ...p });

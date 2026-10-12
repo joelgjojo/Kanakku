@@ -33,6 +33,8 @@ export interface BillItem {
   unit: Unit;
   price: number; // per unit
   total: number;
+  /** A notebook line kept exactly as written (only a total, or a correction): never becomes a stock item. */
+  asWritten?: boolean;
 }
 
 export interface Bill {

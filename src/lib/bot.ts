@@ -110,16 +110,17 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
       }
       const res = await readNotebook(input.media, products, customers);
       let sales = 0, pays = 0, total = 0;
+      const newItems: string[] = [];
       for (const e of res.entries) {
         if (e.kind === "payment" && e.customerName) {
           await recordPayment(e.customerName, e.amount, "notebook");
           pays++;
         } else if (e.kind === "sale") {
           const items = toBillItems(e.items, products);
-          if (!items.length && e.amount > 0) items.push({ productId: null, name: e.lineText.slice(0, 40), qty: 1, unit: "pc", price: e.amount, total: e.amount });
+          if (!items.length && e.amount > 0) items.push({ productId: null, name: e.lineText.slice(0, 40), qty: 1, unit: "pc", price: e.amount, total: e.amount, asWritten: true });
           if (!items.length) continue;
           const isOld = e.date && e.date < istDate();
-          await createBill({
+          const saved = await createBill({
             items,
             customerName: e.customerName,
             paymentMode: e.isCredit && e.customerName ? "credit" : "cash",
@@ -130,11 +131,12 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
           });
           sales++;
           total += e.amount;
+          for (const p of saved.added) if (!newItems.includes(p.nameMl)) newItems.push(p.nameMl);
         }
       }
       return {
         kind: "notebook",
-        reply: `📒 Notebook page read!\n${sales} sales (${rupees(total)}) and ${pays} payments added to Kanakku.\nCheck them in the app under Notebook.`,
+        reply: `📒 Notebook page read!\n${sales} sales (${rupees(total)}) and ${pays} payments added to Kanakku.${newItems.length ? `\n🆕 New in your stock list: ${newItems.join(", ")} (estimated prices, change them on the Stock page).` : ""}\nCheck them in the app under Notebook.`,
       };
     }
 

@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     const { entries } = (await req.json()) as { entries: Entry[] };
     const today = istDate();
     let sales = 0, payments = 0, total = 0;
+    const newItems: string[] = [];
     for (const e of entries) {
       if (e.kind === "payment") {
         if (!e.customerName || !(e.amount > 0)) continue;
@@ -27,13 +28,13 @@ export async function POST(req: Request) {
       }
       let items = e.billItems.filter((i) => i.qty > 0);
       // A line with only a total ("Babu - 240") still counts as a sale.
-      if (!items.length && e.amount > 0) items = [{ productId: null, name: e.lineText.slice(0, 40) || "Notebook entry", qty: 1, unit: "pc", price: e.amount, total: e.amount }];
+      if (!items.length && e.amount > 0) items = [{ productId: null, name: e.lineText.slice(0, 40) || "Notebook entry", qty: 1, unit: "pc", price: e.amount, total: e.amount, asWritten: true }];
       if (!items.length) continue;
       // The amount written in the book is what the customer was charged. Keep it exact.
       const calc = items.reduce((s, i) => s + i.qty * i.price, 0);
       if (e.amount > 0 && Math.abs(e.amount - calc) >= 1) {
         const diff = Math.round((e.amount - calc) * 100) / 100;
-        items = [...items, { productId: null, name: "As written in book", qty: 1, unit: "pc", price: diff, total: diff }];
+        items = [...items, { productId: null, name: "As written in book", qty: 1, unit: "pc", price: diff, total: diff, asWritten: true }];
       }
       const bill = await createBill({
         items,
@@ -46,8 +47,9 @@ export async function POST(req: Request) {
       });
       sales++;
       total += bill.total;
+      for (const p of bill.added) if (!newItems.includes(p.nameMl)) newItems.push(p.nameMl);
     }
-    return ok({ sales, payments, total });
+    return ok({ sales, payments, total, newItems });
   } catch (e) {
     return fail(e);
   }
