@@ -166,6 +166,12 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
             : `\n\n🛑 ${bal.customer.name} is over the pattu limit (${rupees(bal.trust.limit)}). ${bal.trust.reason}`;
         }
         if (bal) reply += hi ? `\n${bal.customer.name} को उनका उधार पेज भेजें: ${customerLink(bal.customer.id)}` : `\nSend ${bal.customer.name} their pattu page: ${customerLink(bal.customer.id)}`;
+        if (bill.added.length) {
+          const list = bill.added.map((p) => `${hi ? p.name : p.nameMl} ₹${p.price}/${p.unit}`).join(", ");
+          reply += hi
+            ? `\n\n🆕 स्टॉक लिस्ट में नया जोड़ा: ${list}। दाम अनुमान है, मालिक बदल सकते हैं।`
+            : `\n\n🆕 Added to your stock list: ${list}. The price is an estimate; change it on the Stock page.`;
+        }
         if (low.length) {
           const list = low.map((f) => `${prodName(f.product, hi)} (${f.product.stock} ${f.product.unit} ${hi ? "बचा" : "left"})`).join(", ");
           reply += hi ? `\n\n⚠️ कम बचा है: ${list}` : `\n\n⚠️ Running low: ${list}`;
@@ -193,7 +199,7 @@ export async function handleMessage(input: { text?: string; media?: Media; sourc
         if (!done.length) return { kind: "error", parsed, reply: hi ? `कौन सा माल आया? ऐसे भेजें: "50 kilo chawal aaya"` : "Which items arrived? Try: \"50 kilo ari vannu\"." };
         return {
           kind: "restock", parsed,
-          reply: `🚚 ${hi ? "माल जुड़ गया" : "Stock added"}\n${done.map((d) => `• ${prodName(d.product, hi)} +${qtyLabel(d.qty, d.product.unit)} → ${Math.round(d.product.stock * 100) / 100} ${d.product.unit}`).join("\n")}`,
+          reply: `🚚 ${hi ? "माल जुड़ गया" : "Stock added"}\n${done.map((d) => `• ${prodName(d.product, hi)} +${qtyLabel(d.qty, d.product.unit)} → ${Math.round(d.product.stock * 100) / 100} ${d.product.unit}${d.isNew ? (hi ? " 🆕 नया" : ` 🆕 new item, ₹${d.product.price}/${d.product.unit}`) : ""}`).join("\n")}`,
         };
       }
       case "stock_query": {

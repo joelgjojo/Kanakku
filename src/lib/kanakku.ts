@@ -47,11 +47,11 @@ export function toBillItems(items: ParsedItem[], products: Product[]): BillItem[
     .filter((i) => i.qty > 0)
     .map((i) => {
       const p = (i.productId && products.find((x) => x.id === i.productId)) || findProduct(products, i.name);
-      const price = i.price ?? p?.price ?? 0;
+      const price = i.price ?? p?.price ?? i.estPrice ?? 0;
       return {
         productId: p?.id ?? null,
         name: p?.name ?? i.name,
-        nameMl: p?.nameMl,
+        nameMl: p?.nameMl ?? i.nameMl ?? undefined,
         qty: i.qty,
         unit: p?.unit ?? i.unit,
         price,
@@ -59,6 +59,36 @@ export function toBillItems(items: ParsedItem[], products: Product[]): BillItem[
       };
     });
 }
+
+const titleCase = (s: string) => s.trim().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * An item the shop sells but hasn't got in its stock list yet ("thakkali", a new brand...) is added
+ * to the list instead of going on the bill at ₹0. Its price is the one spoken, or the AI's usual price,
+ * which the owner can change on the Stock page.
+ */
+export async function addNewProduct(item: { name: string; nameMl?: string | null; unit: Product["unit"]; price: number; stock: number }): Promise<{ product: Product; created: boolean }> {
+  const store = getStore();
+  const products = await store.listProducts();
+  const existing = findProduct(products, item.name) ?? (item.nameMl ? findProduct(products, item.nameMl) : undefined);
+  if (existing) return { product: existing, created: false };
+  const name = titleCase(item.name).slice(0, 40);
+  const product = await store.upsertProduct({
+    id: uid("p"),
+    name,
+    nameMl: item.nameMl?.trim() || name,
+    aliases: [item.name.trim().toLowerCase()],
+    unit: item.unit,
+    price: Math.round(item.price * 100) / 100,
+    stock: Math.max(0, item.stock),
+    lowStockAt: item.unit === "pc" ? 5 : 2,
+    category: "New items",
+  });
+  return { product, created: true };
+}
+
+const isSaneNewItem = (i: { name: string; price: number; qty: number }) =>
+  i.price > 0 && i.qty > 0 && i.name.trim().length >= 2 && i.name.trim().length <= 40 && !/written|book|total/i.test(i.name);
 
 export interface NewBill {
   /** Made by the phone before sending, so a bill retried after a dropped connection is saved only once. */
@@ -74,21 +104,37 @@ export interface NewBill {
   affectStock?: boolean;
 }
 
+export type SavedBill = Bill & { added: Product[] };
+
 const CLIENT_ID = /^b-[A-Za-z0-9_-]{8,64}$/;
 
-export async function createBill(input: NewBill): Promise<Bill> {
+export async function createBill(input: NewBill): Promise<SavedBill> {
   const store = getStore();
   const clientId = input.id && CLIENT_ID.test(input.id) ? input.id : null;
   if (clientId) {
     const existing = await store.getBill(clientId);
-    if (existing) return existing; // already saved: a retry, not a new sale
+    if (existing) return { ...existing, added: [] }; // already saved: a retry, not a new sale
   }
   let customer: Customer | null = null;
   if (input.customerId) customer = (await store.listCustomers()).find((c) => c.id === input.customerId) ?? null;
   if (!customer) customer = await resolveCustomer(input.customerName);
   if (input.paymentMode === "credit" && !customer) throw new Error("Pattu needs a customer name");
 
-  const items = input.items.map((i) => ({ ...i, total: round2(i.qty * i.price) }));
+  // Items not in the stock list yet get added (not from notebook pages, whose odd lines stay as written).
+  const added: Product[] = [];
+  const items: BillItem[] = [];
+  for (const raw of input.items) {
+    const i = { ...raw, total: round2(raw.qty * raw.price) };
+    if (!i.productId && input.source !== "notebook" && isSaneNewItem(i)) {
+      // It was in the shop to be sold, so it starts with that much stock, and ends this bill at zero.
+      const { product: p, created } = await addNewProduct({ name: i.name, nameMl: i.nameMl, unit: i.unit, price: i.price, stock: input.affectStock === false ? 0 : i.qty });
+      if (created && !added.some((a) => a.id === p.id)) added.push({ ...p });
+      i.productId = p.id;
+      i.name = p.name;
+      i.nameMl = p.nameMl;
+    }
+    items.push(i);
+  }
   let bill: Bill;
   try {
     bill = await store.insertBill({
@@ -105,13 +151,13 @@ export async function createBill(input: NewBill): Promise<Bill> {
   } catch (e) {
     // Two copies of the same retried bill arrived together: the first one won.
     const existing = clientId ? await store.getBill(clientId) : null;
-    if (existing) return existing;
+    if (existing) return { ...existing, added: [] };
     throw e;
   }
   if (input.affectStock !== false) {
     for (const i of items) if (i.productId) await store.adjustStock(i.productId, -i.qty);
   }
-  return bill;
+  return { ...bill, added };
 }
 
 export async function recordPayment(customerName: string | null, amount: number, source: Source, customerId?: string) {
@@ -136,10 +182,20 @@ export async function recordPayment(customerName: string | null, amount: number,
 export async function restock(items: ParsedItem[], source: Source) {
   const store = getStore();
   const products = await store.listProducts();
-  const done: { product: Product; qty: number }[] = [];
+  const done: { product: Product; qty: number; isNew?: boolean }[] = [];
   for (const i of items) {
     const p = (i.productId && products.find((x) => x.id === i.productId)) || findProduct(products, i.name);
-    if (!p || !(i.qty > 0)) continue;
+    if (!(i.qty > 0)) continue;
+    if (!p) {
+      // A new item arrived: add it to the stock list with what came in.
+      const price = i.price ?? i.estPrice ?? 0;
+      if (!isSaneNewItem({ name: i.name, price, qty: i.qty })) continue;
+      const { product: added, created } = await addNewProduct({ name: i.name, nameMl: i.nameMl, unit: i.unit, price, stock: i.qty });
+      if (!created) await store.adjustStock(added.id, i.qty);
+      await store.insertStockMove({ id: uid("sm"), createdAt: new Date().toISOString(), productId: added.id, qty: i.qty, reason: "restock", source });
+      done.push({ product: created ? added : { ...added, stock: added.stock + i.qty }, qty: i.qty, isNew: created });
+      continue;
+    }
     await store.adjustStock(p.id, i.qty);
     await store.insertStockMove({ id: uid("sm"), createdAt: new Date().toISOString(), productId: p.id, qty: i.qty, reason: "restock", source });
     done.push({ product: { ...p, stock: p.stock + i.qty }, qty: i.qty });

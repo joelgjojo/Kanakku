@@ -22,7 +22,7 @@ const STATUS: Record<Forecast["status"], { label: string; ml: string; cls: strin
 
 const CATEGORY_ML: Record<string, string> = {
   Grains: "ധാന്യം", Grocery: "പലചരക്ക്", Oil: "എണ്ണ", Beverages: "പാനീയം", Dairy: "പാലും മുട്ടയും", "Personal care": "ശുചിത്വം",
-  Spices: "മസാല", Pulses: "പയർ", Vegetables: "പച്ചക്കറി", Snacks: "പലഹാരം", Household: "വീട്ടുസാധനം",
+  Spices: "മസാല", Pulses: "പയർ", Vegetables: "പച്ചക്കറി", Snacks: "പലഹാരം", Household: "വീട്ടുസാധനം", "New items": "പുതിയ സാധനം",
 };
 
 export default function Stock() {

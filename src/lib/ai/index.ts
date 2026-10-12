@@ -17,8 +17,10 @@ const ITEM_SCHEMA = {
     qty: { type: "number", description: "quantity in the catalogue unit (500 g of a per-kg item = 0.5)" },
     unit: { type: "string", enum: ["kg", "l", "pc", "pkt"] },
     price: { type: ["number", "null"], description: "per-unit price only if the speaker said a different price, else null" },
+    nameMl: { type: ["string", "null"], description: "only for an item NOT in the catalogue: its Malayalam name, else null" },
+    estPrice: { type: ["number", "null"], description: "only for an item NOT in the catalogue: the usual price per unit at a small Kerala shop today, in rupees, else null" },
   },
-  required: ["productId", "name", "qty", "unit", "price"],
+  required: ["productId", "name", "qty", "unit", "price", "nameMl", "estPrice"],
 };
 
 const MESSAGE_SCHEMA = {
@@ -58,7 +60,7 @@ Rules:
 - paymentMode is "credit" when they say പറ്റ് / pattu / പറ്റിൽ എഴുതിക്കോ / കടം / credit / udhaar; "upi" for GPay / UPI / PhonePe; otherwise "cash".
 - customerName: match to a known customer below when possible and return their English name; otherwise return the name as heard. Remove Malayalam case endings (രാജന് → Rajan).
 - price is null unless the shopkeeper said a different price for that item.
-- If an item is not in the catalogue, keep it with productId null and your best guess for unit.`;
+- If an item is not in the catalogue, keep it with productId null, your best guess for unit, its Malayalam name in nameMl, and estPrice = its usual price per unit at a small Kerala shop today. It will be added to the shop's stock list.`;
 
 export async function parseMessage(
   input: { text?: string; audio?: Media },

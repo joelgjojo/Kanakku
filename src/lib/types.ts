@@ -84,6 +84,9 @@ export interface ParsedItem {
   qty: number;
   unit: Unit;
   price: number | null;
+  /** For an item not in the stock list: its Malayalam name and a usual shop price, so it can be added. */
+  nameMl?: string | null;
+  estPrice?: number | null;
 }
 
 /** Language the message was in. Manglish counts as "ml". */

@@ -194,6 +194,13 @@ export default function NewBill() {
                   ? t("Saved on this phone. It will sync when the internet is back.", "ഈ ഫോണിൽ സേവ് ചെയ്തു. നെറ്റ് വന്നാൽ തനിയെ സിങ്ക് ആകും.")
                   : t(`Bill #${saved.bill!.number} saved: ${rupees(saved.bill!.total)}`, `ബിൽ #${saved.bill!.number} സേവ് ചെയ്തു: ${rupees(saved.bill!.total)}`)}
               </p>
+              {saved.bill && (saved.bill as Bill & { added?: Product[] }).added?.length ? (
+                <p className="text-sm mt-1">
+                  🆕 {t("Added to your stock list:", "സ്റ്റോക്ക് ലിസ്റ്റിൽ ചേർത്തു:")}{" "}
+                  {(saved.bill as Bill & { added: Product[] }).added.map((p) => `${ml ? p.nameMl : p.name} ${rupees(p.price)}/${p.unit}`).join(", ")}
+                  {t(". Check the price on the Stock page.", ". വില സ്റ്റോക്ക് പേജിൽ നോക്കൂ.")}
+                </p>
+              ) : null}
               {saved.bill?.paymentMode === "credit" && saved.due !== null && (
                 <p className="text-sm mt-1">{ml ? `${saved.bill.customerName}-ന്റെ പറ്റ് ഇപ്പോൾ ` : `${saved.bill.customerName}'s pattu is now `}<b className="text-due num">{rupees(saved.due)}</b></p>
               )}
@@ -223,7 +230,7 @@ export default function NewBill() {
                   <span className="w-11 shrink-0 text-center text-sm text-faint num">{i + 1}</span>
                   <span className="flex-1 min-w-0 leading-tight">
                     <span className="block truncate font-semibold text-pen-dark">{it.nameMl ?? it.name}</span>
-                    {it.nameMl && <span className="block truncate text-xs text-muted">{it.name}{!it.productId && t(" · not in stock list", " · സ്റ്റോക്ക് ലിസ്റ്റിൽ ഇല്ല")}</span>}
+                    {(it.nameMl || !it.productId) && <span className="block truncate text-xs text-muted">{it.name}{!it.productId && <span className="text-warn">{t(" · new: added to stock on save", " · പുതിയത്: സ്റ്റോക്കിൽ ചേർക്കും")}</span>}</span>}
                   </span>
                   <label className="flex items-center gap-1 text-sm">
                     <span className="sr-only">{t("Quantity", "അളവ്")}</span>
