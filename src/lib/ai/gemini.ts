@@ -5,9 +5,10 @@ import { GoogleGenAI } from "@google/genai";
 const MODELS = [
   process.env.GEMINI_MODEL,
   "gemini-3.6-flash",
+  "gemini-2.5-flash", // fast with thinking off, and its free quota is separate
   "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
-  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
 ].filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
 
 // Free keys have small per-minute and per-day limits. Teammates can each add a free key:
@@ -60,8 +61,13 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
   const tries: { model: string; ms: number; error?: string }[] = [];
   const plan = MODELS.flatMap((model) => KEYS.map((key, k) => ({ model, key, slot: `${k}:${model}` })));
   const fresh = plan.filter((p) => (restingUntil.get(p.slot) ?? 0) < Date.now());
-  for (const { model, key, slot } of fresh.length ? fresh : plan) {
+  const order = fresh.length ? fresh : plan;
+  // A bill shouldn't wait on a slow, overloaded model: give each try a time limit and move on.
+  // The last option gets no limit, so there is always an answer.
+  const limit = effort === "fast" ? 7_000 : 25_000;
+  for (const [i, { model, key, slot }] of order.entries()) {
     const t0 = Date.now();
+    const abortSignal = i < order.length - 1 ? AbortSignal.timeout(limit) : undefined;
     try {
       const call = (withThinking: boolean) =>
         ai(key).models.generateContent({
@@ -71,6 +77,7 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
             responseMimeType: "application/json",
             responseJsonSchema: schema,
             temperature: 0.1,
+            ...(abortSignal ? { abortSignal } : {}),
             ...(withThinking ? { thinkingConfig: thinking(model, effort) } : {}),
           },
         });
@@ -94,7 +101,7 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
       tries.push({ model, ms: Date.now() - t0, error: msg.replace(/\s+/g, " ").slice(0, 80) });
       lastCall = { model: null, ms: Date.now() - started, tries };
       if (/429|quota|exhausted/i.test(msg)) restingUntil.set(slot, Date.now() + 60_000);
-      else if (/503|overloaded|unavailable|high demand/i.test(msg)) restingUntil.set(slot, Date.now() + 20_000);
+      else if (/503|overloaded|unavailable|high demand|abort|timed? ?out/i.test(msg)) restingUntil.set(slot, Date.now() + 30_000);
       else if (/404|not found|unsupported/i.test(msg)) restingUntil.set(slot, Date.now() + 3_600_000);
       // Only move on for "model not found / overloaded / quota" style errors.
       else break;
