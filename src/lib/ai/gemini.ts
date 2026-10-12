@@ -5,10 +5,10 @@ import { GoogleGenAI } from "@google/genai";
 const MODELS = [
   process.env.GEMINI_MODEL,
   "gemini-3.6-flash",
-  "gemini-2.5-flash", // fast with thinking off, and its free quota is separate
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite", // each model has its own free quota, so these also cover for a used-up one
   "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
-  "gemini-2.5-flash-lite",
 ].filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
 
 // Free keys have small per-minute and per-day limits. Teammates can each add a free key:
@@ -62,12 +62,13 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
   const plan = MODELS.flatMap((model) => KEYS.map((key, k) => ({ model, key, slot: `${k}:${model}` })));
   const fresh = plan.filter((p) => (restingUntil.get(p.slot) ?? 0) < Date.now());
   const order = fresh.length ? fresh : plan;
-  // A bill shouldn't wait on a slow, overloaded model: give each try a time limit and move on.
-  // The last option gets no limit, so there is always an answer.
-  const limit = effort === "fast" ? 7_000 : 25_000;
-  for (const [i, { model, key, slot }] of order.entries()) {
+  // A bill shouldn't wait on a slow, overloaded model: each try gets a time limit, then the next model.
+  // Voice notes and photos take longer, so they get more time. If every model ran out of time,
+  // the first one gets one more try with no limit, so there is always an answer.
+  const limit = effort === "careful" ? 30_000 : media ? 20_000 : 7_000;
+  const attempt = async ({ model, key, slot }: (typeof plan)[number], timed: boolean): Promise<{ ok: true; value: T } | { ok: false; timedOut: boolean; stop: boolean }> => {
     const t0 = Date.now();
-    const abortSignal = i < order.length - 1 ? AbortSignal.timeout(limit) : undefined;
+    const abortSignal = timed ? AbortSignal.timeout(limit) : undefined;
     try {
       const call = (withThinking: boolean) =>
         ai(key).models.generateContent({
@@ -94,18 +95,33 @@ export async function askJSON<T>(prompt: string, schema: object, media?: Media, 
       tries.push({ model, ms: Date.now() - t0 });
       lastCall = { model, ms: Date.now() - started, tries };
       console.log(`[kanakku] gemini ${model} ${Date.now() - started} ms` + (tries.length > 1 ? ` (tries: ${tries.map((t) => `${t.model} ${t.ms}ms${t.error ? ` ${t.error}` : ""}`).join(", ")})` : ""));
-      return JSON.parse(text) as T;
+      return { ok: true, value: JSON.parse(text) as T };
     } catch (e) {
       lastErr = e;
       const msg = String((e as Error)?.message ?? e);
-      tries.push({ model, ms: Date.now() - t0, error: msg.replace(/\s+/g, " ").slice(0, 80) });
+      const timedOut = !!abortSignal?.aborted;
+      tries.push({ model, ms: Date.now() - t0, error: timedOut ? "too slow" : msg.replace(/\s+/g, " ").slice(0, 80) });
       lastCall = { model: null, ms: Date.now() - started, tries };
-      if (/429|quota|exhausted/i.test(msg)) restingUntil.set(slot, Date.now() + 60_000);
-      else if (/503|overloaded|unavailable|high demand|abort|timed? ?out/i.test(msg)) restingUntil.set(slot, Date.now() + 30_000);
-      else if (/404|not found|unsupported/i.test(msg)) restingUntil.set(slot, Date.now() + 3_600_000);
-      // Only move on for "model not found / overloaded / quota" style errors.
-      else break;
+      if (timedOut) restingUntil.set(slot, Date.now() + 30_000);
+      else if (/429|quota|exhausted/i.test(msg)) restingUntil.set(slot, Date.now() + 60_000);
+      else if (/503|overloaded|unavailable|high demand/i.test(msg)) restingUntil.set(slot, Date.now() + 30_000);
+      else if (/404|not found|no longer available|unsupported/i.test(msg)) restingUntil.set(slot, Date.now() + 6 * 3_600_000);
+      // Anything else (bad key, bad request) won't get better on another model.
+      else return { ok: false, timedOut, stop: true };
+      return { ok: false, timedOut, stop: false };
     }
+  };
+
+  let slowest: (typeof plan)[number] | null = null;
+  for (const p of order) {
+    const r = await attempt(p, true);
+    if (r.ok) return r.value;
+    if (r.stop) break;
+    if (r.timedOut && !slowest) slowest = p;
+  }
+  if (slowest) {
+    const r = await attempt(slowest, false);
+    if (r.ok) return r.value;
   }
   throw friendly(lastErr);
 }
@@ -119,6 +135,10 @@ function friendly(e: unknown): Error {
   }
   if (/429|quota|exhausted/i.test(msg)) return new Error("Gemini free quota is used up for now. Wait a minute, or use another key.");
   if (/fetch failed|ENOTFOUND|ECONNRESET|ETIMEDOUT|network/i.test(msg)) return new Error("Can't reach Gemini. Check the internet connection. Typed bills still work offline.");
+  // Never show Google's raw error to the shopkeeper.
+  if (/404|not found|no longer available|503|overloaded|unavailable|high demand|abort|^\s*\{/i.test(msg)) {
+    return new Error("Kanakku's AI is busy right now. Please send it again in a moment.");
+  }
   return e instanceof Error ? e : new Error(msg);
 }
 
